@@ -1,6 +1,13 @@
 Hopefully this turns into a nice executable (and library?) to run replaygain
 over many files.
 
+It should support multiple compression and tag formats.  We shall see.
+
+As much of this will be ISC-licensed as possible. I don't understand the core
+Replaygain algorithm, so I copied and modified the LGPL'd libreplaygain from
+Musepack. Somebody has to give the author a punch in the face for using
+global variables for state.
+
 ./autogen.sh
 ./configure
 make
