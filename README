@@ -1,0 +1,8 @@
+Hopefully this turns into a nice executable (and library?) to run replaygain
+over many files.
+
+./autogen.sh
+./configure
+make
+
+Markus Peloquin <markus@cs.wisc.edu>
