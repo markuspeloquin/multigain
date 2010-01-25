@@ -25,24 +25,25 @@
  *  lots of code improvements by Frank Klemm(http://www.uni-jena.de/~pfk/mpp/)
  *    -- credit him for all the _good_ programming ;)
  *
+ *  interface changes by Markus Peloquin <markus@cs.wisc.edu>
  *
  *  For an explanation of the concepts and the basic algorithms involved, go to:
  *    http://www.replaygain.org/
  */
 
 /*
- *  So here's the main source of potential code confusion:
+ * So here's the main source of potential code confusion:
  *
- *  The filters applied to the incoming samples are IIR filters,
- *  meaning they rely on up to <filter order> number of previous samples
- *  AND up to <filter order> number of previous filtered samples.
+ * The filters applied to the incoming samples are IIR filters,
+ * meaning they rely on up to <filter order> number of previous samples
+ * AND up to <filter order> number of previous filtered samples.
  *
- *  I set up the gain_analyze_samples routine to minimize memory usage and interface
- *  complexity. The speed isn't compromised too much(I don't think), but the
- *  internal complexity is higher than it should be for such a relatively
- *  simple routine.
+ * I set up the gain_analyze_samples routine to minimize memory usage and
+ * interface complexity. The speed isn't compromised too much (I don't think),
+ * but the internal complexity is higher than it should be for such a
+ * relatively simple routine.
  *
- *  Optimization/clarity suggestions are welcome.
+ * Optimization/clarity suggestions are welcome.
  */
 
 #include <math.h>
@@ -56,10 +57,8 @@
 
 #define YULE_ORDER		10
 #define BUTTER_ORDER		2
-#define filterYule		filterYule
-#define filterButter		filterButter
 /* percentile which is louder than the proposed level */
-#define RMS_PERCENTILE		0.95
+const double RMS_PERCENTILE =	0.95;
 /* maximum allowed sample frequency [Hz] */
 #define MAX_SAMP_FREQ		48000.
 /* Time slice size [s] */
@@ -69,8 +68,6 @@
 #define MAX_ORDER		(BUTTER_ORDER > YULE_ORDER ? BUTTER_ORDER : YULE_ORDER)
 /* max. Samples per Time slice */
 #define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME)
-/* calibration value */
-#define PINK_REF		64.82
 
 /* Type used for filtering */
 typedef double	Float_t;
@@ -85,7 +82,7 @@ struct replaygain_ctx {
 	Float_t		loutbuf[MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
 	/* left "out" (i.e. post second filter) samples */
 	Float_t		*lout;
-	Float_t		rinprebuf[MAX_ORDER  *2];
+	Float_t		rinprebuf[MAX_ORDER * 2];
 
 	/* right input samples ... */
 	Float_t		*rinpre;
@@ -98,8 +95,8 @@ struct replaygain_ctx {
 	 * for RMS window */
 	long		sampleWindow;
 	long		totsamp;
-	double		lsum;
-	double		rsum;
+	Float_t		lsum;
+	Float_t		rsum;
 	int		freqindex;
 	int		first;
 
@@ -257,9 +254,11 @@ gain_alloc_analysis(long samplefreq, enum replaygain_init_status *out_status)
 	return ctx;
 }
 
-static inline double
-fsqr(const double d)
-{	return d * d; }
+static inline Float_t
+fsqr(const Float_t d)
+{
+	return d * d;
+}
 
 enum replaygain_status
 gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *left_samples,
@@ -378,7 +377,7 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *left_samples,
 			double	val;
 			int	ival;
 
-			val = STEPS_per_dB * 10. * log10(
+			val = STEPS_PER_DB * 10. * log10(
 			    (ctx->lsum + ctx->rsum) / (ctx->totsamp * 2) +
 			    1.e-37);
 			ival = (int)val;
@@ -446,7 +445,7 @@ gain_adjustment(const struct replaygain_sample *out)
 			break;
 	}
 
-	return (Float_t)i / STEPS_per_dB;
+	return (Float_t)i / STEPS_PER_DB;
 }
 
 static Float_t
