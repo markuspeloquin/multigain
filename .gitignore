@@ -1,18 +1,23 @@
+# globs
 *.la
 *.lo
 *.o
-*.swp
-.deps
-.libs
+.*.swp
 Makefile
 Makefile.in
-aclocal.m4
-autom4te.cache
-config.log
-config.status
-config
-configure
-include/config.h
-include/config.h.in
-include/stamp-h1
-libtool
+
+# directories
+.deps/
+.libs/
+
+# absolute paths
+/aclocal.m4
+/autom4te.cache
+/config.log
+/config.status
+/config
+/configure
+/include/config.h
+/include/config.h.in
+/include/stamp-h1
+/libtool
