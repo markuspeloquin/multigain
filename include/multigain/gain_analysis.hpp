@@ -110,8 +110,15 @@ public:
 	{	reset(); }
 	void reset()
 	{	memset(&_sum, 0, sizeof(_sum)); }
+
 	void add(const Sample &sample)
-	{	gain_sample_accum(&_sum, &sample._sample); }
+	{	*this += sample; }
+	Sample &operator+=(const Sample &sample)
+	{
+		gain_sample_accum(&_sum, &sample._sample);
+		return *this;
+	}
+
 	double adjustment() const throw (Not_enough_samples)
 	{
 		double v = gain_adjustment(&_sum);
@@ -125,8 +132,7 @@ private:
 
 class Analyzer {
 public:
-	Analyzer(long samplefreq)
-	    throw (Bad_samplefreq) :
+	Analyzer(long samplefreq) throw (Bad_samplefreq) :
 		_ctx(0)
 	{
 		enum replaygain_init_status	status;
@@ -149,9 +155,8 @@ public:
 	// Call as many times as you want, with as many or as few samples as
 	// you want. If mono, pass the sample buffer in through left_samples,
 	// leave right_samples NULL, and make sure num_channels = 1.
-	bool add(const double *left_samples,
-	    const double *right_samples, size_t num_samples,
-	    int num_channels)
+	bool add(const double *left_samples, const double *right_samples,
+	    size_t num_samples, int num_channels)
 	{
 		enum replaygain_status	status;
 
@@ -166,6 +171,9 @@ public:
 	}
 
 private:
+	Analyzer(const Analyzer &) {}
+	void operator=(const Analyzer &) {}
+
 	struct replaygain_ctx	*_ctx;
 };
 
