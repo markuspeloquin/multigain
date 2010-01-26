@@ -201,7 +201,7 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 	}
 
 	// word 6, bit 30 (little endian)
-	if (buf[20] & 0x2)
+	if (buf[23] & 0x40)
 		// add footer size
 		size += 32;
 
@@ -241,7 +241,7 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 			uint16_t	bit_rate;
 			bool		padded;
 
-			switch (buf[1] & 0xe) {
+			switch ((buf[1] >> 1) & 0x7) {
 			case 0x1: frame_type = MPG_1_1; break;
 			case 0x2: frame_type = MPG_1_2; break;
 			case 0x3: frame_type = MPG_1_3; break;
@@ -255,7 +255,7 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 			    1000;
 			if (!bit_rate) return;
 
-			frequency = (buf[2] & 0xc0) >> 2;
+			frequency = (buf[2] >> 2) & 0x3;
 			frequency = MPG_FREQ[
 			    frame_type < MPG_2_1 ? 0 : 1][frequency];
 			if (!frequency) return;

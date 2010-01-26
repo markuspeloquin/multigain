@@ -1,4 +1,5 @@
 # globs
+*~
 *.la
 *.lo
 *.o
