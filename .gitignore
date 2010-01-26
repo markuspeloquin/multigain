@@ -4,6 +4,7 @@
 *.lo
 *.o
 .*.swp
+.swp
 Makefile
 Makefile.in
 

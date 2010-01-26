@@ -453,7 +453,7 @@ gain_get_chapter(struct replaygain_ctx *ctx)
 {
 	Float_t		retval;
 
-	retval = gain_adjustment_single(&ctx->A);
+	retval = gain_adjustment(&ctx->A);
 
 	for (int i = 0; i < ANALYZE_SIZE; i++) {
 		ctx->B.sample[i] += ctx->A.sample[i];

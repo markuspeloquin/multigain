@@ -5,25 +5,15 @@
 #endif
 
 #include <cassert>
-#include <fstream>
-#include <list>
-#include <tr1/cstdint>
 
 #include <lame/lame.h>
 
+#include <multigain/tag_locate.hpp>
+
+namespace multigain {
 namespace {
 
-enum tag_type {
-	TAG_UNDEFINED = 0,
-	TAG_APE_1,
-	TAG_APE_2,
-	TAG_ID3_1,
-	TAG_ID3_1_1,
-	TAG_ID3_2_3,
-	TAG_ID3_2_4,
-	TAG_MEDIA
-};
-
+#ifdef _TEST
 enum mpg_frame_type {
 	MPG_1_1,
 	MPG_1_2,
@@ -33,6 +23,7 @@ enum mpg_frame_type {
 	MPG_2_3,
 	MPG_UNDEFINED
 };
+#endif
 
 // also an ape footer
 struct ape_header {
@@ -58,7 +49,7 @@ struct id3_2_header {
 };
 
 struct id3_1_tag {
-/*00*/	uint8_t				id[0x03];
+/*00*/	uint8_t				id    [0x03];
 /*03*/	uint8_t				title [0x1e];
 /*21*/	uint8_t				artist[0x1e];
 /*3f*/	uint8_t				album [0x1e];
@@ -123,16 +114,6 @@ uint32_t MPG_FREQ[2][4] = {
 	size = (144 * bit_rate / sample_rate) + padded;
 	*/
 #endif
-
-struct tag_info {
-	tag_info(enum tag_type type, off_t start, size_t size) :
-		start(start), size(size), type(type)
-	{}
-
-	off_t		start;
-	size_t		size;
-	enum tag_type	type;
-};
 
 inline uint16_t
 buf_safe16(const uint8_t buf[2])
@@ -286,8 +267,11 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 	return true;
 }
 
+} // end anon
+} // end multigain
+
 void
-determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
+multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 {
 	struct id3_1_tag	tag31;
 	// big enough for the longest id: 'APETAGEX'
@@ -327,17 +311,6 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 
 	in.seekg(0, std::ios_base::end);
 	pos = in.tellg();
-
-	union {
-		struct {
-/*61*/			uint8_t		comment[0x1e];
-		} id3_1;
-		struct {
-/*61*/			uint8_t		comment[0x1c];
-/*7d*/			uint8_t		__padding;
-/*7e*/			uint8_t		track;
-		} id3_1_1;
-	} ct; // comment and/or track
 
 	for (;;) {
 		in.seekg(pos - sizeof(tag31), std::ios_base::beg);
@@ -385,8 +358,7 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 	iter_media->size = pos - iter_media->start;
 }
 
-}
-
+/*
 int
 decode_mp3(const std::string &path)
 {
@@ -403,6 +375,7 @@ decode_mp3(const std::string &path)
 
 	return -1;
 }
+*/
 
 #ifdef _TEST
 int main(int argc, char **argv)
