@@ -1,5 +1,7 @@
 #include <endian.h>
 
+//#include <iostream>
+
 #include <cassert>
 #include <fstream>
 #include <list>
@@ -218,7 +220,7 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 void
 determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 {
-	const size_t	SZ = 32;
+	const size_t	SZ = 128;
 	uint8_t		buf[SZ];
 	off_t		pos;
 
@@ -242,12 +244,12 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 			bool		padded;
 
 			switch ((buf[1] >> 1) & 0x7) {
-			case 0x1: frame_type = MPG_1_1; break;
-			case 0x2: frame_type = MPG_1_2; break;
-			case 0x3: frame_type = MPG_1_3; break;
-			case 0x5: frame_type = MPG_2_1; break;
-			case 0x6: frame_type = MPG_2_2; break;
-			case 0x7: frame_type = MPG_2_3; break;
+			case 0x1: frame_type = MPG_2_3; break;
+			case 0x2: frame_type = MPG_2_2; break;
+			case 0x3: frame_type = MPG_2_1; break;
+			case 0x5: frame_type = MPG_1_3; break;
+			case 0x6: frame_type = MPG_1_2; break;
+			case 0x7: frame_type = MPG_1_1; break;
 			default: return;
 			}
 
@@ -257,7 +259,7 @@ determine_tagging(std::ifstream &in, std::list<tag_info> &out_tags)
 
 			frequency = (buf[2] >> 2) & 0x3;
 			frequency = MPG_FREQ[
-			    frame_type < MPG_2_1 ? 0 : 1][frequency];
+			    frame_type < MPG_1_1 ? 1 : 0][frequency];
 			if (!frequency) return;
 
 			padded = buf[2] & 0x2 != 0;
@@ -347,3 +349,35 @@ decode_mp3(const std::string &path)
 
 	return -1;
 }
+
+/*
+int main(int argc, char **argv)
+{
+	assert(argc > 1);
+
+	std::string path = argv[1];
+	std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
+	std::list<tag_info> tags;
+	determine_tagging(file, tags);
+
+	for (std::list<tag_info>::const_iterator i = tags.begin();
+	    i != tags.end(); ++i) {
+		const char *name;
+		switch (i->type) {
+		case TAG_UNDEFINED:	name = "TAG_UNDEFINED";	break;
+		case TAG_APE_1:		name = "TAG_APE_1";	break;
+		case TAG_APE_2:		name = "TAG_APE_2";	break;
+		case TAG_ID3_1:		name = "TAG_ID3_1";	break;
+		case TAG_ID3_1_1:	name = "TAG_ID3_1_1";	break;
+		case TAG_ID3_2_3:	name = "TAG_ID3_2_3";	break;
+		case TAG_ID3_2_4:	name = "TAG_ID3_2_4";	break;
+		case TAG_MEDIA:		name = "TAG_MEDIA";	break;
+		}
+
+		std::cout << name << ": " << i->start << ", "
+		    << i->size << '\n';
+	}
+
+	return 0;
+}
+*/
