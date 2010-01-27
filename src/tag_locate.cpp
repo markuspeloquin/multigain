@@ -29,12 +29,13 @@ enum mpg_frame_type {
 // also an ape footer
 struct ape_header {
 	// all uint32_t are LE
-	uint8_t		id[8];
-	uint32_t	version;
-	uint32_t	size;
-	uint32_t	items;
-	uint32_t	flags;
-	uint8_t		reserved[8];
+/*00*/	uint8_t		id[8];
+/*08*/	uint32_t	version;
+/*0c*/	uint32_t	size;
+/*10*/	uint32_t	items;
+/*14*/	uint32_t	flags;
+/*18*/	uint8_t		reserved[8];
+/*20*/
 };
 
 const size_t SZ_ID3_2_HEADER = 10;
@@ -43,10 +44,11 @@ const size_t SZ_ID3_2_FOOTER = 10;
 // never use sizeof() with this structure; depending on the architecture's
 // alignment, it may be 10 or 12; use SZ_ID3_2_*
 struct id3_2_header {
-	uint8_t		id[0x3];
-	uint8_t		version[0x2];
-	uint8_t		flags;
-	uint8_t		size[0x4];
+/*00*/	uint8_t		id[0x3];
+/*03*/	uint8_t		version[0x2];
+/*05*/	uint8_t		flags;
+/*06*/	uint8_t		size[0x4];
+/*0a*/
 };
 
 struct id3_1_tag {
