@@ -37,11 +37,11 @@ struct ape_header {
 	uint8_t		reserved[8];
 };
 
-// use these instead of sizeof(id3_2_header), since
-// [sizeof(id3_2_header) != 0 mod 4]:
 const size_t SZ_ID3_2_HEADER = 10;
 const size_t SZ_ID3_2_FOOTER = 10;
 
+// never use sizeof() with this structure; depending on the architecture's
+// alignment, it may be 10 or 12; use SZ_ID3_2_*
 struct id3_2_header {
 	uint8_t		id[0x3];
 	uint8_t		version[0x2];
@@ -331,11 +331,14 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 
 	std::list<tag_info>::iterator	iter_media;
 
+	// prefix tags
 	for (pos = 0;;) {
 		if (!in.seekg(pos, std::ios_base::beg))
 			throw Disk_error("seek error");
 		if (!in.read(reinterpret_cast<char *>(buf), 8))
 			throw Disk_error("read error");
+
+		// indicate to skip_*() functions where to start looking
 		if (!in.seekg(pos, std::ios_base::beg))
 			throw Disk_error("seek error");
 
@@ -359,16 +362,23 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 		}
 	}
 
+	// seek to end to check for trailing tags; I'm certainly abusing the
+	// seek function a bit from here on out, but the alternative is
+	// writing a bunch of other code with its own overhead
 	if (!in.seekg(0, std::ios_base::end))
 		throw Disk_error("seek error");
 	pos = in.tellg();
 
+	// suffix tags
+	// check for tag types from longest to shortest, to take advantage of
+	// any caching (provided the C++ file buffering prevails, there is
+	// only one read() system call)
 	for (;;) {
+		// ID3-1 / ID3-1.1
 		if (!in.seekg(pos - sizeof(tag31), std::ios_base::beg))
 			throw Disk_error("seek error");
 		in.read(reinterpret_cast<char *>(&tag31),
 		    sizeof(tag31));
-
 		if (std::equal(tag31.id, tag31.id + 3, "TAG")) {
 			enum tag_type	type;
 			if (!tag31.ct.id3_1_1.__padding &&
@@ -382,6 +392,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			continue;
 		}
 
+		// APE-x
 		if (!in.seekg(pos - sizeof(struct ape_header),
 		    std::ios_base::beg))
 			throw Disk_error("seek error");
@@ -395,6 +406,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			continue;
 		}
 
+		// ID3-2.x
 		if (!in.seekg(pos - SZ_ID3_2_FOOTER, std::ios_base::beg))
 			throw Disk_error("seek error");
 		if (!in.read(reinterpret_cast<char *>(buf), 3))
@@ -407,7 +419,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			continue;
 		}
 
-		// no other tags found, so must be complete
+		// no other tags found, so must have found all
 		break;
 	}
 
