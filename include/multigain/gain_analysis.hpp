@@ -74,22 +74,23 @@
 
 namespace multigain {
 
+#include <multigain/errors.hpp>
 #include <multigain/gain_analysis.h>
 
-struct Bad_samplefreq : public std::exception {
-	virtual ~Bad_samplefreq() throw () {}
-};
-
-struct Not_enough_samples : public std::exception {
-	virtual ~Not_enough_samples() throw () {}
-};
-
+/** A sample of a Replaygain calculation */
 class Sample {
 public:
-	// Real initialization comes from Analyzer::pop().
+	/** Real initialization comes from Analyzer::pop(). */
 	Sample() {}
 
-	// The result undefined unless initialized with Analyzer::pop().
+	/** How much to adjust by
+	 *
+	 * The result is undefined unless initialized with
+	 * <code>Analyzer::pop()</code>.
+	 *
+	 * \return	The adjustment
+	 * \throw Not_enough_samples	...
+	 */
 	double adjustment() const throw (Not_enough_samples)
 	{
 		double v = gain_adjustment(&_sample);
@@ -104,21 +105,42 @@ private:
 	struct replaygain_sample	_sample;
 };
 
+/** An accumulation of a number of samples */
 class Sample_accum {
 public:
+	/** Construct and initialize to zero */
 	Sample_accum()
 	{	reset(); }
+
+	/** Reset the sum to zero */
 	void reset()
 	{	memset(&_sum, 0, sizeof(_sum)); }
 
+	/** Add a sample into the accumulation
+	 *
+	 * \param sample	The sample to add
+	 */
 	void add(const Sample &sample)
 	{	*this += sample; }
+
+	/** Add a sample into the accumulation
+	 *
+	 * \param sample	The sample to add
+	 */
 	Sample &operator+=(const Sample &sample)
 	{
 		gain_sample_accum(&_sum, &sample._sample);
 		return *this;
 	}
 
+	/** How much to adjust by
+	 *
+	 * The result is undefined unless initialized with
+	 * <code>Analyzer::pop()</code>.
+	 *
+	 * \return	The adjustment
+	 * \throw Not_enough_samples	...
+	 */
 	double adjustment() const throw (Not_enough_samples)
 	{
 		double v = gain_adjustment(&_sum);
@@ -130,8 +152,13 @@ private:
 	struct replaygain_sample	_sum;
 };
 
+/** An analyzing context */
 class Analyzer {
 public:
+	/** Construct the analyzer object
+	 *
+	 * \param samplefreq	The input sample frequency
+	 */
 	Analyzer(long samplefreq) throw (Bad_samplefreq) :
 		_ctx(0)
 	{
@@ -152,9 +179,15 @@ public:
 		free(_ctx);
 	}
 
-	// Call as many times as you want, with as many or as few samples as
-	// you want. If mono, pass the sample buffer in through left_samples,
-	// leave right_samples NULL, and make sure num_channels = 1.
+	/** Accumulate samples into a calculation
+	 *
+	 * \param left_samples	Samples for the left (or mono) channel
+	 * \param right_samples	Samples for the right channel; set to NULL for
+	 *	mono
+	 * \param num_samples	Number of samples
+	 * \param num_channels	Number of channels
+	 * \retval false	Bad number of channels or some exceptional
+	 */
 	bool add(const double *left_samples, const double *right_samples,
 	    size_t num_samples, int num_channels)
 	{
@@ -165,12 +198,17 @@ public:
 		return status == REPLAYGAIN_OK;
 	}
 
+	/** Return current calculation, reset context
+	 *
+	 * \param[out] out	The accumulated Replaygain sample
+	 */
 	void pop(Sample *out)
 	{
 		gain_pop(_ctx, &out->_sample);
 	}
 
 private:
+	// no copying
 	Analyzer(const Analyzer &) {}
 	void operator=(const Analyzer &) {}
 

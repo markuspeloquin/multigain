@@ -69,6 +69,8 @@
 #ifndef MULTIGAIN_GAIN_ANALYSIS_H
 #define MULTIGAIN_GAIN_ANALYSIS_H
 
+#include <features.h>
+
 #ifdef __cplusplus
 #	include <cstddef>
 #else
@@ -77,11 +79,15 @@
 
 const double	GAIN_NOT_ENOUGH_SAMPLES = -24601.;
 
-/* consider these constants private */
 #ifdef __cplusplus
+	/** Not to be used directly. */
 	const unsigned	STEPS_PER_DB =	100;
+
 	/* Table entries for 0...MAX_dB (normal max. values are 70...80 dB) */
+	/** Not to be used directly. */
 	const unsigned	MAX_DB =	120;
+
+	/** Not to be used directly. */
 	const size_t	ANALYZE_SIZE =	STEPS_PER_DB * MAX_DB;
 
 #	define	__INLINE	inline
@@ -99,41 +105,70 @@ enum replaygain_status {
 };
 
 enum replaygain_init_status {
-	REPLAYGAIN_INIT_ERR_MEM,
-	REPLAYGAIN_INIT_ERR_SAMPLEFREQ,
+	REPLAYGAIN_INIT_ERR_MEM,	/**< Out of memory */
+	REPLAYGAIN_INIT_ERR_SAMPLEFREQ,	/**< Unsupported sampling frequency */
 	REPLAYGAIN_INIT_OK
 };
 
 struct replaygain_ctx;
 
+/** A sample or sum of samples */
 struct replaygain_sample {
 	uint32_t sample[ANALYZE_SIZE];
 };
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+__BEGIN_DECLS
 
-/* Initialize.  Call free() on the result when finished.
- * Returns NULL on error. */
+/** Initialize the analyzing context
+ *
+ * \param[in] samplefreq	The sampling frequency
+ * \param[out] out_status	An error/success indicator
+ * \retval NULL	An error occurred; check <code>out_status</code> for an
+ *	explanation
+ * \return	The context, which must be passed to <code>free()</code> when
+ *	finished
+ */
 struct replaygain_ctx *
 		gain_alloc_analysis(long samplefreq,
 		    enum replaygain_init_status *out_status);
 
-/* Call as many times as you want, with as many or as few samples as you want.
- * If mono, pass the sample buffer in through left_samples, leave
- * right_samples NULL, and make sure num_channels = 1. */
+/** Accumulate samples into a calculation
+ *
+ * \param ctx	Analyzing context
+ * \param left_samples	Samples for the left (or mono) channel
+ * \param right_samples	Samples for the right channel; set to NULL for mono
+ * \param num_samples	Number of samples
+ * \param num_channels	Number of channels
+ * \retval REPLAYGAIN_ERROR	Bad number of channels or some exceptional
+ *	error
+ */
 enum replaygain_status
-		gain_analyze_samples(struct replaygain_ctx *,
+		gain_analyze_samples(struct replaygain_ctx *ctx,
 		    const double *left_samples, const double *right_samples,
 		    size_t num_samples, int num_channels);
 
-void		gain_pop(struct replaygain_ctx *,
+/** Return current calculation, reset context
+ *
+ * \param ctx	Analyzing context
+ * \param[out] out	The accumulated Replaygain sample
+ */
+void		gain_pop(struct replaygain_ctx *ctx,
 		    struct replaygain_sample *out);
 
+/** Add one sample to another
+ *
+ * \param sum	The accumulated sample
+ * \param addition	The sample to add to <code>sum</code>
+ */
 __INLINE void	gain_sample_accum(struct replaygain_sample *sum,
 		    const struct replaygain_sample *addition);
-double		gain_adjustment(const struct replaygain_sample *);
+
+/** Decibal adjustment for a sample
+ *
+ * \param sample	A sample calculation
+ * \return	 How many decibals to adjust by
+ */
+double		gain_adjustment(const struct replaygain_sample *sample);
 
 
 
@@ -147,9 +182,7 @@ gain_sample_accum(struct replaygain_sample *sum,
 		sum->sample[i] += addition->sample[i];
 }
 
-#ifdef __cplusplus
-}
-#endif
+__END_DECLS
 
 #undef __INLINE
 
