@@ -19,7 +19,7 @@ enum tag_type {
 	TAG_ID3_2_3,
 	TAG_ID3_2_4,
 	TAG_ID3_2_UNDEFINED,
-	TAG_MEDIA
+	TAG_MPEG
 };
 
 struct tag_info {

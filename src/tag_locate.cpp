@@ -47,6 +47,7 @@ struct id3_2_header {
 /*00*/	uint8_t		id[0x3];
 /*03*/	uint8_t		version[0x2];
 /*05*/	uint8_t		flags;
+	// BE, synchsafe
 /*06*/	uint8_t		size[0x4];
 /*0a*/
 };
@@ -346,7 +347,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 
 		if (buf[0] == 0xff && (buf[1] & 0xf0) == 0xf0) {
 			// start of MP3 data
-			out_tags.push_back(tag_info(TAG_MEDIA, pos, 0));
+			out_tags.push_back(tag_info(TAG_MPEG, pos, 0));
 			--(iter_media = out_tags.end());
 			break;
 		} else if (std::equal(buf, buf + 3, "ID3")) {
@@ -472,7 +473,7 @@ int main(int argc, char **argv)
 		case TAG_ID3_2_3:	name = "TAG_ID3_2_3";	break;
 		case TAG_ID3_2_4:	name = "TAG_ID3_2_4";	break;
 		case TAG_APE_UNDEFINED:	name = "TAG_ID3_2_UNDEFINED";	break;
-		case TAG_MEDIA:		name = "TAG_MEDIA";	break;
+		case TAG_MPEG:		name = "TAG_MPEG";	break;
 		}
 
 		std::cout << name << ": " << i->start << ", "
