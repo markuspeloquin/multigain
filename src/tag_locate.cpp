@@ -5,6 +5,7 @@
 #endif
 
 #include <cassert>
+#include <algorithm>
 
 #include <lame/lame.h>
 
@@ -136,51 +137,61 @@ buf_unsafe32(const uint8_t buf[4])
 	return buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
 }
 
-bool
+void
 skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
+    throw (Disk_error, Unsupported_tag)
 {
 	struct id3_2_header	header;
 	off_t			pos;
 	uint32_t		size;
 	enum tag_type		type;
-	bool			footer;
 
 	pos = in.tellg();
 
+	// read full header
 	if (reversed) {
-		in.seekg(-SZ_ID3_2_FOOTER, std::ios_base::cur);
-		in.read(reinterpret_cast<char *>(&header), SZ_ID3_2_FOOTER);
+		if (!in.seekg(-SZ_ID3_2_FOOTER, std::ios_base::cur))
+			throw Disk_error("seek error");
+		if (!in.read(reinterpret_cast<char *>(&header),
+		    SZ_ID3_2_FOOTER))
+			throw Disk_error("read error");
 
 		assert(std::equal(header.id, header.id + 3, "3DI"));
 	} else {
-		in.read(reinterpret_cast<char *>(&header), SZ_ID3_2_HEADER);
+		if (!in.read(reinterpret_cast<char *>(&header),
+		    SZ_ID3_2_HEADER))
+			throw Disk_error("read error");
 
 		assert(std::equal(header.id, header.id + 3, "ID3"));
 	}
 
+	// check version
 	if (header.version[0] == 3 && header.version[1] == 0)
 		type = TAG_ID3_2_3;
 	else if (header.version[0] == 4 && header.version[1] == 0)
 		type = TAG_ID3_2_4;
-	else
-		return false;
-
-	footer = header.flags & 0x10;
-	size = buf_safe32(header.size) + SZ_ID3_2_HEADER;
-	if (footer) size += SZ_ID3_2_FOOTER;
-
-	if (reversed) {
-		out_tags.push_back(tag_info(type, pos - size, size));
-		in.seekg(pos - size, std::ios_base::beg);
-	} else {
-		out_tags.push_back(tag_info(type, pos, size));
-		in.seekg(pos + size, std::ios_base::beg);
+	else {
+		// ensure all unknown flags are zero
+		if (header.flags & 0x0f)
+			throw Unsupported_tag("ID3-2.x with unknown flags");
+		type = TAG_ID3_2_UNDEFINED;
 	}
-	return true;
+
+	// get size for whole tag
+	size = buf_safe32(header.size) + SZ_ID3_2_HEADER;
+	if (header.flags & 0x10) size += SZ_ID3_2_FOOTER;
+
+	if (reversed)
+		pos -= size;
+	out_tags.push_back(tag_info(type, pos, size));
 }
 
+// return false iff tag unrecognized; if tag had an unknown version, it is
+// recorded as TAG_APE_UNDEFINED in 'out_tags', but APE is concistent enough
+// that the size can be known
 bool
 skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags)
+    throw (Disk_error, Unsupported_tag)
 {
 	union {
 		struct ape_header	footer;	// if footer
@@ -193,25 +204,50 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags)
 	pos = in.tellg();
 
 	for (;;) {
-		uint32_t	len;
-		char		c;
+		char	c;
 
-		in.read(reinterpret_cast<char *>(&buf), 8);
+		if (!in.read(reinterpret_cast<char *>(&buf), 8))
+			throw Disk_error("read error");
 		if (std::equal(footer->id, footer->id + 8, "APETAGX")) {
+			uint32_t	flags;
 			uint32_t	size;
 			enum tag_type	type;
 
-			// read next two words
-			in.read(reinterpret_cast<char *>(&buf) + 8, 8);
+			// read remainder
+			if (!in.read(reinterpret_cast<char *>(&buf) + 8,
+			    sizeof(ape_header) - 8))
+				throw Disk_error("read error");
+
+			flags = le32toh(footer->flags);
 
 			switch (le32toh(footer->version)) {
 			case 1000: type = TAG_APE_1; break;
 			case 2000: type = TAG_APE_2; break;
-			default: return false;
+			default:
+				// ensure all unknown flags are zero
+				if (flags & 0x1ffffff8 ||
+				    std::max_element(footer->reserved,
+				    footer->reserved +
+				    sizeof(footer->reserved)) != 0)
+					throw Unsupported_tag(
+					    "APE with unknown flags");
+				type = TAG_APE_UNDEFINED;
 			}
 
+			// footer + all of tag items (no header)
 			size = le32toh(footer->size);
-			out_tags.push_back(tag_info(type, pos, footer->size));
+
+			if (flags & 0x80000000)
+				// add header size
+				size += sizeof(ape_header);
+
+			if (pos + size != in.tellg())
+				// okay, so by some 'random' chance, we
+				// started before the APE tag, but ended up
+				// finding one beyond all odds
+				return false;
+
+			out_tags.push_back(tag_info(type, pos, size));
 			break;
 		}
 
@@ -221,50 +257,64 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags)
 		while ((c = in.get()));
 
 		// skip value
-		in.seekg(le32toh(buf.len), std::ios_base::cur);
+		if (!in.seekg(le32toh(buf.len), std::ios_base::cur))
+			// either the tag is corrupt, or this wasn't an APE
+			// tag to begin with
+			return false;
 	}
 
 	return true;
 }
 
-bool
+void
 skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
+    throw (Disk_error, Unsupported_tag)
 {
 	struct ape_header	footer;
 	off_t			pos;
+	uint32_t		flags;
 	uint32_t		size;
 	enum tag_type		type;
 
 	pos = in.tellg();
 
 	if (reversed)
-		in.seekg(-sizeof(footer), std::ios_base::cur);
+		if (!in.seekg(-sizeof(footer), std::ios_base::cur))
+			throw Disk_error("seek error");
 
 	// read all but last two words
-	in.read(reinterpret_cast<char *>(&footer), sizeof(footer) - 8);
+	if (!in.read(reinterpret_cast<char *>(&footer), sizeof(footer) - 8))
+		throw Disk_error("read error");
 	assert(std::equal(footer.id, footer.id + 8, "APETAGX"));
 
+	flags = le32toh(footer.flags);
 	switch (le32toh(footer.version)) {
 	case 1000: type = TAG_APE_1; break;
 	case 2000: type = TAG_APE_2; break;
-	default: return false;
+	default:
+		// ensure all unknown flags are zero
+		if (flags & 0x1ffffff8 || std::max_element(footer.reserved,
+		    footer.reserved + sizeof(footer.reserved)) != 0)
+			throw Unsupported_tag("APE with unknown flags");
+		type = TAG_APE_UNDEFINED;
 	}
 
+	// footer + all tag items (no header)
 	size = le32toh(footer.size);
 
-	// word 6, bit 30 (little endian)
-	if (footer.flags & 0x40)
-		// add footer size
-		size += 32;
+	if (flags & 0x80000000)
+		// add header size
+		size += sizeof(ape_header);
 
 	if (reversed) {
 		out_tags.push_back(tag_info(type, pos - size, size));
-		in.seekg(pos - size, std::ios_base::beg);
+		if (!in.seekg(pos - size, std::ios_base::beg))
+			throw Disk_error("seek error");
 	} else {
 		out_tags.push_back(tag_info(type, pos, size));
-		in.seekg(pos + size, std::ios_base::beg);
+		if (!in.seekg(pos + size, std::ios_base::beg))
+			throw Disk_error("seek error");
 	}
-	return true;
 }
 
 } // end anon
@@ -272,6 +322,7 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 
 void
 multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
+    throw (Disk_error, Unsupported_tag)
 {
 	struct id3_1_tag	tag31;
 	// big enough for the longest id: 'APETAGEX'
@@ -281,9 +332,12 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 	std::list<tag_info>::iterator	iter_media;
 
 	for (pos = 0;;) {
-		in.seekg(pos, std::ios_base::beg);
-		in.read(reinterpret_cast<char *>(buf), 8);
-		in.seekg(pos, std::ios_base::beg);
+		if (!in.seekg(pos, std::ios_base::beg))
+			throw Disk_error("seek error");
+		if (!in.read(reinterpret_cast<char *>(buf), 8))
+			throw Disk_error("read error");
+		if (!in.seekg(pos, std::ios_base::beg))
+			throw Disk_error("seek error");
 
 		if (buf[0] == 0xff && (buf[1] & 0xf0) == 0xf0) {
 			// start of MP3 data
@@ -291,31 +345,30 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			--(iter_media = out_tags.end());
 			break;
 		} else if (std::equal(buf, buf + 3, "ID3")) {
-			if (!skip_id3_2(in, false, out_tags)) {
-				return;
-			}
+			skip_id3_2(in, false, out_tags);
 			pos += out_tags.back().size;
 		} else if (std::equal(buf, buf + 8, "APETAGEX")) {
-			if (!skip_ape_1(in, out_tags)) {
-				return;
-			}
+			skip_ape_2(in, false, out_tags);
 			pos += out_tags.back().size;
 		} else {
 			// maybe APE 1?  if it isn't, go on a wild ride
-			if (!skip_ape_1(in, out_tags)) {
-				return;
-			}
+			if (!skip_ape_1(in, out_tags))
+				throw Unsupported_tag(
+				    "completely unrecognized");
 			pos += out_tags.back().size;
 		}
 	}
 
-	in.seekg(0, std::ios_base::end);
+	if (!in.seekg(0, std::ios_base::end))
+		throw Disk_error("seek error");
 	pos = in.tellg();
 
 	for (;;) {
-		in.seekg(pos - sizeof(tag31), std::ios_base::beg);
+		if (!in.seekg(pos - sizeof(tag31), std::ios_base::beg))
+			throw Disk_error("seek error");
 		in.read(reinterpret_cast<char *>(&tag31),
 		    sizeof(tag31));
+
 		if (std::equal(tag31.id, tag31.id + 3, "TAG")) {
 			enum tag_type	type;
 			if (!tag31.ct.id3_1_1.__padding &&
@@ -329,24 +382,27 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			continue;
 		}
 
-		in.seekg(pos - sizeof(struct ape_header), std::ios_base::beg);
-		in.read(reinterpret_cast<char *>(buf), 8);
+		if (!in.seekg(pos - sizeof(struct ape_header),
+		    std::ios_base::beg))
+			throw Disk_error("seek error");
+		if (!in.read(reinterpret_cast<char *>(buf), 8))
+			throw Disk_error("read error");
 		if (std::equal(buf, buf + 8, "APETAGEX")) {
-			in.seekg(pos, std::ios_base::beg);
-			if (!skip_ape_2(in, true, out_tags)) {
-				return;
-			}
+			if (!in.seekg(pos, std::ios_base::beg))
+				throw Disk_error("seek error");
+			skip_ape_2(in, true, out_tags);
 			pos -= out_tags.back().size;
 			continue;
 		}
 
-		in.seekg(pos - SZ_ID3_2_FOOTER, std::ios_base::beg);
-		in.read(reinterpret_cast<char *>(buf), 3);
+		if (!in.seekg(pos - SZ_ID3_2_FOOTER, std::ios_base::beg))
+			throw Disk_error("seek error");
+		if (!in.read(reinterpret_cast<char *>(buf), 3))
+			throw Disk_error("read error");
 		if (std::equal(buf, buf + 3, "3DI")) {
-			in.seekg(pos, std::ios_base::beg);
-			if (!skip_id3_2(in, true, out_tags)) {
-				return;
-			}
+			if (!in.seekg(pos, std::ios_base::beg))
+				throw Disk_error("seek error");
+			skip_id3_2(in, true, out_tags);
 			pos -= out_tags.back().size;
 			continue;
 		}
@@ -380,12 +436,14 @@ decode_mp3(const std::string &path)
 #ifdef _TEST
 int main(int argc, char **argv)
 {
+	using namespace multigain;
+
 	assert(argc > 1);
 
 	std::string path = argv[1];
 	std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
 	std::list<tag_info> tags;
-	determine_tagging(file, tags);
+	find_tags(file, tags);
 
 	for (std::list<tag_info>::const_iterator i = tags.begin();
 	    i != tags.end(); ++i) {
@@ -394,10 +452,12 @@ int main(int argc, char **argv)
 		case TAG_UNDEFINED:	name = "TAG_UNDEFINED";	break;
 		case TAG_APE_1:		name = "TAG_APE_1";	break;
 		case TAG_APE_2:		name = "TAG_APE_2";	break;
+		case TAG_APE_UNDEFINED:	name = "TAG_APE_UNDEFINED";	break;
 		case TAG_ID3_1:		name = "TAG_ID3_1";	break;
 		case TAG_ID3_1_1:	name = "TAG_ID3_1_1";	break;
 		case TAG_ID3_2_3:	name = "TAG_ID3_2_3";	break;
 		case TAG_ID3_2_4:	name = "TAG_ID3_2_4";	break;
+		case TAG_APE_UNDEFINED:	name = "TAG_ID3_2_UNDEFINED";	break;
 		case TAG_MEDIA:		name = "TAG_MEDIA";	break;
 		}
 
