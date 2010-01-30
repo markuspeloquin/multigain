@@ -171,7 +171,7 @@ multigain::Mpeg_decoder::~Mpeg_decoder()
 
 std::pair<size_t, size_t>
 multigain::Mpeg_decoder::decode_frame(
-    double left[MAX_FRAMES], double right[MAX_FRAMES],
+    double left[MAX_SAMPLES], double right[MAX_SAMPLES],
     struct decode_info *info)
     throw (Decode_error, Disk_error, Mpg123_error)
 {
@@ -181,7 +181,7 @@ multigain::Mpeg_decoder::decode_frame(
 	} buf;
 
 	// 2: channels
-	int16_t		block[MAX_FRAMES * 2];
+	int16_t		block[MAX_SAMPLES * 2];
 	uint32_t	bps;
 	int		errval;
 	uint16_t	bytes;

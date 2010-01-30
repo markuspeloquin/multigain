@@ -134,9 +134,12 @@ struct replaygain_ctx *
 
 /** Accumulate samples into a calculation
  *
+ * The range of the samples should be is [-32767.0,32767.0].
+ *
  * \param ctx	Analyzing context
  * \param left_samples	Samples for the left (or mono) channel
- * \param right_samples	Samples for the right channel; set to NULL for mono
+ * \param right_samples	Samples for the right channel; ignored for
+ *	single-channel
  * \param num_samples	Number of samples
  * \param num_channels	Number of channels
  * \retval REPLAYGAIN_ERROR	Bad number of channels or some exceptional

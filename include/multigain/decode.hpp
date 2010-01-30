@@ -18,13 +18,13 @@ struct decode_info {
 
 class Mpeg_decoder {
 public:
-	const static size_t MAX_FRAMES = 1152;
+	const static size_t MAX_SAMPLES = 1152;
 	Mpeg_decoder(std::ifstream &file, off_t media_begin, off_t media_end)
 	    throw (Disk_error, Mpg123_error);
 	~Mpeg_decoder();
 
 	std::pair<size_t, size_t> decode_frame(
-	    double left[MAX_FRAMES], double right[MAX_FRAMES],
+	    double left[MAX_SAMPLES], double right[MAX_SAMPLES],
 	    struct decode_info *info=0)
 	    throw (Decode_error, Disk_error, Mpg123_error);
 
