@@ -127,8 +127,7 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 	for (size_t i = 0; i < count; i += step) {
 		int32_t sample = samples[i];
 		if (sample < 0)
-			// scale down ever so slightly; why are they using
-			// -32768???
+			// scale down ever so slightly; certainly pointless
 			*out++ = sample * 32767.0 / 32768;
 		else
 			*out++ = sample;
