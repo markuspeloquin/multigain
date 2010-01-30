@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <algorithm>
+#include <iostream>
 
 #include <multigain/tag_locate.hpp>
 
@@ -364,4 +365,50 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 	}
 
 	iter_media->size = pos - iter_media->start;
+}
+
+void
+multigain::dump_tags(const std::list<tag_info> &tags)
+{
+	for (std::list<tag_info>::const_iterator i = tags.begin();
+	    i != tags.end(); ++i) {
+		const char *name;
+		switch (i->type) {
+		case TAG_UNDEFINED:
+			name = "TAG_UNDEFINED";
+			break;
+		case TAG_APE_1:
+			name = "TAG_APE_1";
+			break;
+		case TAG_APE_2:
+			name = "TAG_APE_2";
+			break;
+		case TAG_APE_UNDEFINED:
+			name = "TAG_APE_UNDEFINED";
+			break;
+		case TAG_ID3_1:
+			name = "TAG_ID3_1";
+			break;
+		case TAG_ID3_1_1:
+			name = "TAG_ID3_1_1";
+			break;
+		case TAG_ID3_2_3:
+			name = "TAG_ID3_2_3";
+			break;
+		case TAG_ID3_2_4:
+			name = "TAG_ID3_2_4";
+			break;
+		case TAG_ID3_2_UNDEFINED:
+			name = "TAG_ID3_2_UNDEFINED";
+			break;
+		case TAG_MPEG:
+			name = "TAG_MPEG";
+			break;
+		default:
+			assert(0);
+		}
+
+		std::cout << name << ": " << i->start << ", "
+		    << i->size << '\n';
+	}
 }

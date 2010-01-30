@@ -72,9 +72,10 @@
 #include <exception>
 #include <stdexcept>
 
+#include <multigain/errors.hpp>
+
 namespace multigain {
 
-#include <multigain/errors.hpp>
 #include <multigain/gain_analysis.h>
 
 /** A sample of a Replaygain calculation */
@@ -127,7 +128,7 @@ public:
 	 *
 	 * \param sample	The sample to add
 	 */
-	Sample &operator+=(const Sample &sample)
+	Sample_accum &operator+=(const Sample &sample)
 	{
 		gain_sample_accum(&_sum, &sample._sample);
 		return *this;
@@ -187,6 +188,7 @@ public:
 	 * \param num_samples	Number of samples
 	 * \param num_channels	Number of channels
 	 * \retval false	Bad number of channels or some exceptional
+	 *	event
 	 */
 	bool add(const double *left_samples, const double *right_samples,
 	    size_t num_samples, int num_channels)

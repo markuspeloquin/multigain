@@ -12,6 +12,15 @@ struct Bad_samplefreq : public std::exception {
 	virtual ~Bad_samplefreq() throw () {}
 };
 
+struct Decode_error : std::exception {
+	Decode_error(const std::string &msg) : _msg("Decode error: ")
+	{	_msg += msg; }
+	~Decode_error() throw () {}
+	const char *what() const throw ()
+	{	return _msg.c_str(); }
+	std::string _msg;
+};
+
 /** A read/write/seek/etc. error. */
 struct Disk_error : std::exception {
 	Disk_error(const std::string &msg) : _msg("Disk error: ")
@@ -19,6 +28,14 @@ struct Disk_error : std::exception {
 	~Disk_error() throw () {}
 	const char *what() const throw ()
 	{	return _msg.c_str(); }
+	std::string _msg;
+};
+
+struct Mpg123_error : public std::exception {
+	Mpg123_error(int errval);
+	const char *what() const throw ()
+	{	return _msg.c_str(); }
+	virtual ~Mpg123_error() throw () {}
 	std::string _msg;
 };
 

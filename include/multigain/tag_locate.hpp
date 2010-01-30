@@ -46,6 +46,8 @@ struct tag_info {
 void	find_tags(std::ifstream &in, std::list<tag_info> &out)
 	    throw (Disk_error, Unsupported_tag);
 
+void	dump_tags(const std::list<tag_info> &);
+
 }
 
 #endif
