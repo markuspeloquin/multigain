@@ -79,6 +79,7 @@ mpeg_parse_frame_header(const uint8_t header[4],
 {
 	int32_t			frequency;
 	int16_t			bitrate;
+	uint8_t			chan_mode;
 	enum mpeg_layer		layer;
 	enum mpeg_version	version;
 	bool			padded;
@@ -87,12 +88,13 @@ mpeg_parse_frame_header(const uint8_t header[4],
 	if (header[0] != 0xff || (header[1] & 0xe0) != 0xe0)
 		return false;
 
-	// -------- ---VVLL- BBBBFFFFP- --------
+	// -------- ---VVLL- BBBBFFFFP- CC------
 	version = static_cast<enum mpeg_version>((header[1] >> 3) & 0x3);
 	layer = static_cast<enum mpeg_layer>((header[1] >> 1) & 0x3);
 	bitrate = header[2] >> 4;
 	frequency = (header[2] >> 2) & 0x3;
 	padded = (header[2] & 0x2) != 0;
+	chan_mode = header[3] >> 6;
 
 	// translate bitrate, frequency
 	bitrate = MPEG_BITRATE[mpeg_bitrate_tab(version, layer)][bitrate];
@@ -101,12 +103,12 @@ mpeg_parse_frame_header(const uint8_t header[4],
 	if (bitrate <= 0) return false;
 	if (frequency <= 0) return false;
 
-	switch (header[3] >> 6) {
-	case 2: case 3:
-		out_stereo = true;
+	switch (chan_mode) {
+	case 3:
+		out_stereo = false;
 		break;
 	default:
-		out_stereo = false;
+		out_stereo = true;
 	}
 
 	out_bps = static_cast<uint32_t>(bitrate) * 1000;
@@ -125,7 +127,8 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 	for (size_t i = 0; i < count; i += step) {
 		int32_t sample = samples[i];
 		if (sample < 0)
-			// scale down; why are they using -32768???
+			// scale down ever so slightly; why are they using
+			// -32768???
 			*out++ = sample * 32767.0 / 32768;
 		else
 			*out++ = sample;
@@ -243,6 +246,7 @@ multigain::Mpeg_decoder::decode_frame(
 		uint8_t	data[6913];
 	} buf;
 
+	// 2: channels
 	int16_t		block[MAX_FRAMES * 2];
 	uint32_t	bps;
 	int		errval;
@@ -250,18 +254,18 @@ multigain::Mpeg_decoder::decode_frame(
 	uint16_t	frames;
 	uint16_t	frequency;
 	bool		stereo;
+	bool		format_set;
 
 	bytes = 0;
 	frames = 0;
+	format_set = false;
 	do {
 		size_t		done;
+		long		rate;
+		int		channels;
+		int		encoding;
 		uint16_t	block_size;
 		uint16_t	size;
-#if 0
-		long		*rate;
-		int		*channels;
-		int		*encoding;
-#endif
 
 		// read header
 
@@ -297,24 +301,33 @@ multigain::Mpeg_decoder::decode_frame(
 		_pos += size;
 		bytes += size;
 
-		if (stereo)
-			block_size = MAX_FRAMES * 4;
-		else
-			block_size = MAX_FRAMES * 2;
+		block_size = stereo ? sizeof(block) : sizeof(block) / 2;
 
-#if 0
-		// see what mpg123 has to say
 		if ((errval = mpg123_getformat(_hdl,
 		    &rate, &channels, &encoding)) != MPG123_OK)
 			throw Mpg123_error(errval);
 
-		if (rate != frequency)
+		if (rate && rate != frequency)
 			throw Decode_error("frequency confusion");
-		if (channels != stereo + 1)
+		if (channels && channels != stereo+1){
+			std::cerr << channels << '\n';
 			throw Decode_error("stereo confusion");
-#endif
+		}
+/*
+		// reset format
+		if (rate) {
+			if ((errval = mpg123_format_none(_hdl)) !=
+			    MPG123_OK)
+				throw Mpg123_error(errval);
 
-		// receive back from decode
+			if ((errval = mpg123_format(_hdl, frequency,
+			    1 + stereo, MPG123_ENC_FLOAT_64)) !=
+			    MPG123_OK)
+				throw Mpg123_error(errval);
+		}
+*/
+
+		// get decoded samples
 
 		switch ((errval = mpg123_read(_hdl,
 		    reinterpret_cast<uint8_t *>(block), block_size, &done))) {

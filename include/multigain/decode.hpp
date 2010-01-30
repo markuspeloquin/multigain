@@ -18,7 +18,7 @@ struct decode_info {
 
 class Mpeg_decoder {
 public:
-	const static size_t MAX_FRAMES = 1152 * 2;
+	const static size_t MAX_FRAMES = 1152;
 	Mpeg_decoder(std::ifstream &file, off_t media_begin, off_t media_end)
 	    throw (Disk_error, Mpg123_error);
 	~Mpeg_decoder();

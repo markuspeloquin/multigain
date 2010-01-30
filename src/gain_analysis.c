@@ -62,12 +62,13 @@ const double RMS_PERCENTILE =	0.95;
 /* maximum allowed sample frequency [Hz] */
 #define MAX_SAMP_FREQ		48000.
 /* Time slice size [s] */
-#define RMS_WINDOW_TIME		0.050
+#define RMS_WINDOW_TIME_NUM	1
+#define RMS_WINDOW_TIME_DEN	20
 /* Table entries per dB */
 
 #define MAX_ORDER		(BUTTER_ORDER > YULE_ORDER ? BUTTER_ORDER : YULE_ORDER)
 /* max. Samples per Time slice */
-#define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME)
+#define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME_NUM / RMS_WINDOW_TIME_DEN)
 
 /* calibration value */
 const double PINK_REF =		64.82; /* 298640883795 */
@@ -157,9 +158,9 @@ static const Float_t ABButter[9][2*BUTTER_ORDER + 1] = {
  * comment out the indicated line) */
 
 static void
-filterYule(const Float_t *input, Float_t *output, size_t nSamples, const Float_t *kernel)
+filterYule(const Float_t *input, Float_t *output, size_t nSamples,
+    const Float_t *kernel)
 {
-
 	while (nSamples--) {
 		/* 1e-10 is a hack to avoid slowdown because of denormals */
 		*output =  1e-10             + input [  0] * kernel[ 0] -
@@ -214,7 +215,9 @@ ResetSampleFrequency(struct replaygain_ctx *ctx, long samplefreq)
 		return REPLAYGAIN_INIT_ERR_SAMPLEFREQ;
 	}
 
-	ctx->sampleWindow = (int)ceil(samplefreq * RMS_WINDOW_TIME);
+	ctx->sampleWindow = (int)ceil(
+	    samplefreq * RMS_WINDOW_TIME_NUM + RMS_WINDOW_TIME_DEN - 1) /
+	    RMS_WINDOW_TIME_DEN;
 
 	ctx->lsum = 0.;
 	ctx->rsum = 0.;
