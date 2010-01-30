@@ -74,7 +74,7 @@ bool
 mpeg_parse_frame_header(const uint8_t header[4],
     uint32_t &out_bps,
     uint16_t &out_frequency,
-    bool &out_stereo,
+    uint8_t &out_channels,
     uint16_t &out_size)
 {
 	int32_t			frequency;
@@ -105,10 +105,10 @@ mpeg_parse_frame_header(const uint8_t header[4],
 
 	switch (chan_mode) {
 	case 3:
-		out_stereo = false;
+		out_channels = 1;
 		break;
 	default:
-		out_stereo = true;
+		out_channels = 2;
 	}
 
 	out_bps = static_cast<uint32_t>(bitrate) * 1000;
@@ -137,72 +137,6 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 
 } // end anon
 } // end multigain
-
-/*
-ssize_t
-multigain::mpeg_decode_frame(std::ifstream &in, off_t max_size,
-    bool &out_stereo, uint16_t &out_frequency,
-    double left[1152*2], double right[1152*2])
-{
-	static bool _lame_init = false;
-	if (!_lame_init) {
-		if (lame_decode_init() == -1) {
-			fprintf(stderr, "lame failed to initialize\n");
-		}
-		_lame_init = true;
-	}
-
-	struct {
-		uint8_t		header[4];
-		uint8_t		data[6913];
-	} buf;
-	short			int_l[1152 * 2];
-	short			int_r[1152 * 2];
-	int			nout;
-	uint16_t		frequency;
-	uint16_t		size;
-	bool			stereo;
-
-	for (;;) {
-		if ((max_size -= 4) < 0)
-			// not enough room for a header
-			return 0;
-		if (!in.read(reinterpret_cast<char *>(buf.header), 4))
-			throw Disk_error("read error");
-
-		if (!mpeg_parse_frame_header(buf.header,
-		    frequency, stereo, size)) {
-			// not a real frame header
-			in.seekg(-4);
-			return 0;
-		}
-
-		if ((max_size -= size - 4) < 0) {
-			std::cerr
-			    << "frame data overlaps supposed tag data\n";
-			return -1;
-		}
-
-		if (!in.read(reinterpret_cast<char *>(buf.data), size - 4))
-			throw Disk_error("read error");
-
-		nout = lame_decode(buf.header, size, int_l, int_r);
-		if (nout == -1) {
-			std::cerr << "decoding error\n";
-			return -1;
-		} else if (nout)
-			break;
-		// else continue
-	}
-
-	out_stereo = stereo;
-	out_frequency = frequency;
-	sample_translate(int_l, int_l + nout, left);
-	if (stereo)
-		sample_translate(int_r, int_r + nout, right);
-	return nout;
-}
-*/
 
 multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file,
     off_t media_begin, off_t media_end) throw (Disk_error, Mpg123_error) :
@@ -253,7 +187,7 @@ multigain::Mpeg_decoder::decode_frame(
 	uint16_t	bytes;
 	uint16_t	frames;
 	uint16_t	frequency;
-	bool		stereo;
+	uint8_t		channels;
 	bool		format_set;
 
 	bytes = 0;
@@ -261,8 +195,8 @@ multigain::Mpeg_decoder::decode_frame(
 	format_set = false;
 	do {
 		size_t		done;
-		long		rate;
-		int		channels;
+		long		frequency_;
+		int		channels_;
 		int		encoding;
 		uint16_t	block_size;
 		uint16_t	size;
@@ -275,7 +209,7 @@ multigain::Mpeg_decoder::decode_frame(
 		if (!_file.read(reinterpret_cast<char *>(buf.header), 4))
 			throw Disk_error("read error");
 		if (!mpeg_parse_frame_header(buf.header,
-		    bps, frequency, stereo, size)) {
+		    bps, frequency, channels, size)) {
 			// not a real frame header
 			_file.seekg(_pos);
 			return std::make_pair(0, 0);
@@ -301,17 +235,18 @@ multigain::Mpeg_decoder::decode_frame(
 		_pos += size;
 		bytes += size;
 
-		block_size = stereo ? sizeof(block) : sizeof(block) / 2;
+		block_size = channels == 2 ?
+		    sizeof(block) : sizeof(block) / 2;
 
 		if ((errval = mpg123_getformat(_hdl,
-		    &rate, &channels, &encoding)) != MPG123_OK)
+		    &frequency_, &channels_, &encoding)) != MPG123_OK)
 			throw Mpg123_error(errval);
 
-		if (rate && rate != frequency)
+		if (frequency_ && frequency_ != frequency)
 			throw Decode_error("frequency confusion");
-		if (channels && channels != stereo+1){
+		if (channels_ && channels_ != channels) {
 			std::cerr << channels << '\n';
-			throw Decode_error("stereo confusion");
+			throw Decode_error("channels confusion");
 		}
 /*
 		// reset format
@@ -321,7 +256,7 @@ multigain::Mpeg_decoder::decode_frame(
 				throw Mpg123_error(errval);
 
 			if ((errval = mpg123_format(_hdl, frequency,
-			    1 + stereo, MPG123_ENC_FLOAT_64)) !=
+			    channels, MPG123_ENC_FLOAT_64)) !=
 			    MPG123_OK)
 				throw Mpg123_error(errval);
 		}
@@ -338,7 +273,7 @@ multigain::Mpeg_decoder::decode_frame(
 		case MPG123_DONE:
 		case MPG123_NEED_MORE:
 		case MPG123_OK:
-			frames = done / ((stereo + 1) * 2);
+			frames = done / (channels * 2);
 			break;
 		default:
 			throw Mpg123_error(errval);
@@ -348,10 +283,10 @@ multigain::Mpeg_decoder::decode_frame(
 	if (info) {
 		info->bps = bps;
 		info->frequency = frequency;
-		info->stereo = stereo;
+		info->channels = channels;
 	}
 
-	if (stereo) {
+	if (channels == 2) {
 		sample_translate(block, frames, 2, left);
 		sample_translate(block + 1, frames, 2, right);
 	} else

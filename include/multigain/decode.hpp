@@ -13,7 +13,7 @@ namespace multigain {
 struct decode_info {
 	uint32_t	bps;
 	uint16_t	frequency;
-	bool		stereo;
+	uint8_t		channels;
 };
 
 class Mpeg_decoder {
