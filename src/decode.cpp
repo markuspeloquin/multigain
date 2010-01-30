@@ -264,12 +264,13 @@ multigain::Mpeg_decoder::decode_frame(
 
 		// get decoded samples
 
-		switch ((errval = mpg123_read(_hdl,
-		    reinterpret_cast<uint8_t *>(block), block_size, &done))) {
-		// I definitely didn't write my code to take advantage of
-		// this wealth of status information; my code's already aware
-		// of this stuff
-		case MPG123_NEW_FORMAT:
+		for (;;) {
+			errval = mpg123_read(_hdl,
+			    reinterpret_cast<uint8_t *>(block), block_size,
+			    &done);
+			if (errval != MPG123_NEW_FORMAT) break;
+		}
+		switch (errval) {
 		case MPG123_DONE:
 		case MPG123_NEED_MORE:
 		case MPG123_OK:
