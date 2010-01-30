@@ -69,6 +69,9 @@ const double RMS_PERCENTILE =	0.95;
 /* max. Samples per Time slice */
 #define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME)
 
+/* calibration value */
+const double PINK_REF =		64.82; /* 298640883795 */
+
 /* Type used for filtering */
 typedef double	Float_t;
 
@@ -445,7 +448,7 @@ gain_adjustment(const struct replaygain_sample *out)
 			break;
 	}
 
-	return (Float_t)i / STEPS_PER_DB;
+	return PINK_REF - (Float_t)i / STEPS_PER_DB;
 }
 
 static Float_t

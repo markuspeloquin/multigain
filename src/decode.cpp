@@ -1,8 +1,6 @@
 #include <cassert>
 #include <iostream>
-#include <limits>
 #include <memory>
-#include <boost/scoped_array.hpp>
 
 #include <mpg123.h>
 
@@ -124,13 +122,13 @@ void
 sample_translate(const int16_t *samples, size_t count, uint8_t step,
     double *out)
 {
-	int16_t min = std::numeric_limits<int16_t>::min();
-	int16_t max = std::numeric_limits<int16_t>::max();
-	assert(min == -32768);
-	assert(max == 32767);
 	for (size_t i = 0; i < count; i += step) {
 		int32_t sample = samples[i];
-		*out++ = sample << 15;
+		if (sample < 0)
+			// scale down; why are they using -32768???
+			*out++ = sample * 32767.0 / 32768;
+		else
+			*out++ = sample;
 	}
 }
 
