@@ -264,12 +264,9 @@ multigain::Mpeg_decoder::decode_frame(
 
 		// get decoded samples
 
-		for (;;) {
-			errval = mpg123_read(_hdl,
-			    reinterpret_cast<uint8_t *>(block), block_size,
-			    &done);
-			if (errval != MPG123_NEW_FORMAT) break;
-		}
+		while ((errval = mpg123_read(_hdl,
+		    reinterpret_cast<uint8_t *>(block), block_size, &done)) ==
+		    MPG123_NEW_FORMAT);
 		switch (errval) {
 		case MPG123_DONE:
 		case MPG123_NEED_MORE:
