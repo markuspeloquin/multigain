@@ -251,8 +251,11 @@ multigain::Mpeg_decoder::decode_frame(
 
 		// first time, this will be zero, which is okay; it will be
 		// sorted out below
-		block_size = _last_channels == 2 ?
-		    sizeof(block) : sizeof(block) / 2;
+		switch (_last_channels) {
+		case 2:  block_size = sizeof(block);     break;
+		case 1:  block_size = sizeof(block) / 2; break;
+		default: block_size = 0;                 break;
+		}
 
 		// get decoded samples
 
