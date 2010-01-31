@@ -11,7 +11,6 @@ struct mpg123_handle_struct;
 namespace multigain {
 
 struct decode_info {
-	uint32_t	bps;
 	uint16_t	frequency;
 	uint8_t		channels;
 };
@@ -38,6 +37,9 @@ private:
 	off_t				_pos;
 	off_t				_end;
 	struct mpg123_handle_struct	*_hdl;
+
+	uint32_t	_last_frequency;
+	uint8_t		_last_channels;
 };
 
 }
