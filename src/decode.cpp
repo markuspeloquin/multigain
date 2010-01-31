@@ -170,87 +170,95 @@ multigain::Mpeg_decoder::~Mpeg_decoder()
 	mpg123_delete(_hdl);
 }
 
+size_t
+multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME])
+    throw (Disk_error)
+{
+	char		*buf = reinterpret_cast<char *>(frame);
+	uint32_t	bps;
+	uint16_t	frequency;
+	uint16_t	size;
+	uint8_t		channels;
+
+	// read/parse header
+
+	// if no bytes left (even if _end != filesize) assume nothing left
+	if (_end == _pos) return 0;
+
+	if (!_file.read(buf, 4)) {
+		// no room for frame header
+		_end = _pos;
+		_file.seekg(_pos);
+		return 0;
+	}
+
+	if (!mpeg_parse_frame_header(frame, bps, frequency, channels, size)) {
+		// not a real frame header
+		_end = _pos;
+		_file.seekg(_pos);
+		return 0;
+	}
+
+	// read remainder of frame
+
+	if (!_file.read(reinterpret_cast<char *>(frame + 4), size - 4)) {
+		// there should have been something
+		_end = _pos;
+		_file.seekg(_pos);
+		throw Disk_error("read error");
+	}
+
+	return size;
+}
+
 std::pair<size_t, size_t>
 multigain::Mpeg_decoder::decode_frame(
     double left[MAX_SAMPLES], double right[MAX_SAMPLES],
     struct decode_info *info)
     throw (Decode_error, Disk_error, Mpg123_error)
 {
-	struct {
-		uint8_t	header[4];
-		uint8_t	data[6913];
-	} buf;
+	// encoded data
+	uint8_t		frame[MAX_FRAME];
 
-	// 2: channels
+	// decoded data; 2: channels
 	int16_t		block[MAX_SAMPLES * 2];
 	int		errval;
 	uint16_t	bytes;
-	uint16_t	frames;
-	bool		format_set;
+	uint16_t	samples;
+	// number of attempts made at end (some frame(s) read, no samples
+	// returned); I would be lying if I claimed to understand libmpg123
+	uint8_t		attempts;
 
+	attempts = 0;
 	bytes = 0;
-	frames = 0;
-	format_set = false;
+	samples = 0;
 	do {
-		size_t		done;
+		size_t		bytes_out;
 		uint16_t	block_size;
 		uint16_t	size;
-		bool		input_done;
 
-		if (_end - _pos < 4)
-			// not enough room for a header
-			input_done = true;
-		else {
-			uint32_t	bps;
-			uint16_t	frequency;
-			uint8_t		channels;
+		// read next MPEG frame
+		size = next_frame(frame);
+		bytes += size;
 
-			// read/parse header
-
-			if (!_file.read(reinterpret_cast<char *>(buf.header),
-			    4))
-				throw Disk_error("read error");
-			if (!mpeg_parse_frame_header(buf.header,
-			    bps, frequency, channels, size)) {
-				// not a real frame header
-				_file.seekg(_pos);
-				return std::make_pair(0, 0);
-			}
-
-			// read remainder
-
-			if (_end - _pos < size) {
-				_file.seekg(_pos);
-				throw Decode_error("frame data overlaps "
-				    "supposed tag data\n");
-			}
-			if (!_file.read(reinterpret_cast<char *>(buf.data),
-			    size - 4)) {
-				_file.seekg(_pos);
-				throw Disk_error("read error");
-			}
-
-			// send to decoder
-
-			if ((errval = mpg123_feed(_hdl, buf.header, size)) !=
-			    MPG123_OK) {
-				_file.seekg(_pos);
-				throw Mpg123_error(errval);
-			}
-			_pos += size;
-			bytes += size;
-			input_done = false;
+		// send to decoder
+		if ((errval = mpg123_feed(_hdl, frame, size)) != MPG123_OK) {
+			// undo next_frame()'s damage
+			_pos -= size;
+			_file.seekg(_pos);
+			throw Mpg123_error(errval);
 		}
 
+		// first time, this will be zero, which is okay; it will be
+		// sorted out below
 		block_size = _last_channels == 2 ?
 		    sizeof(block) : sizeof(block) / 2;
 
 		// get decoded samples
 
 		while ((errval = mpg123_read(_hdl,
-		    reinterpret_cast<uint8_t *>(block), block_size, &done)) ==
-		    MPG123_NEW_FORMAT) {
-			std::cout << "mpg123_new_format\n";
+		    reinterpret_cast<uint8_t *>(block), block_size,
+		    &bytes_out)) == MPG123_NEW_FORMAT) {
 			// normally, this block will be executed only after
 			// the first frame; frequencies and channels don't
 			// ever really switch mid-file
@@ -284,25 +292,20 @@ multigain::Mpeg_decoder::decode_frame(
 		}
 		switch (errval) {
 		case MPG123_DONE:
-			std::cout << "mpg123_done\n";
-			if (input_done)
-				return std::make_pair(0, 0);
-			break;
 		case MPG123_NEED_MORE:
-			std::cout << "mpg123_need_more\n";
-			if (input_done)
+			if (bytes) attempts++;
+			if (!bytes || attempts == 10)
 				return std::make_pair(0, 0);
 			break;
 		case MPG123_OK:
-			std::cout << "mpg123_ok\n";
 			// 2: bytes per frame per channel
 			assert(_last_channels);
-			frames = done / (_last_channels * 2);
+			samples = bytes_out / (_last_channels * 2);
 			break;
 		default:
 			throw Mpg123_error(errval);
 		}
-	} while (!frames);
+	} while (!samples);
 
 	if (info) {
 		info->frequency = _last_frequency;
@@ -310,10 +313,10 @@ multigain::Mpeg_decoder::decode_frame(
 	}
 
 	if (_last_channels == 2) {
-		sample_translate(block, frames, 2, left);
-		sample_translate(block + 1, frames, 2, right);
+		sample_translate(block, samples, 2, left);
+		sample_translate(block + 1, samples, 2, right);
 	} else
-		sample_translate(block, frames, 1, left);
+		sample_translate(block, samples, 1, left);
 
-	return std::make_pair(bytes, frames);
+	return std::make_pair(bytes, samples);
 }

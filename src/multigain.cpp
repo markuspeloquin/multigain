@@ -62,8 +62,6 @@ main(int argc, char **argv)
 			return 1;
 		}
 
-		std::cout << counts.first << '\t' << counts.second << '\n';
-
 		if (!analyzer->add(left, right, counts.second,
 		    info.channels)) {
 			std::cerr << "what\n";

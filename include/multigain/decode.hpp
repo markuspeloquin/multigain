@@ -28,6 +28,10 @@ public:
 	    throw (Decode_error, Disk_error, Mpg123_error);
 
 private:
+	static const size_t MAX_FRAME = 6921;
+
+	size_t next_frame(uint8_t[MAX_FRAME]) throw (Disk_error);
+
 	Mpeg_decoder(const Mpeg_decoder &_) : _file(_._file)
 	{ throw std::exception(); }
 	void operator=(const Mpeg_decoder &)
