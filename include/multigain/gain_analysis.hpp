@@ -82,7 +82,7 @@ namespace multigain {
 class Sample {
 public:
 	/** Real initialization comes from Analyzer::pop(). */
-	Sample() {}
+	Sample() : _dirty(true) {}
 
 	/** How much to adjust by
 	 *
@@ -94,7 +94,13 @@ public:
 	 */
 	double adjustment() const throw (Not_enough_samples)
 	{
-		double v = gain_adjustment(&_sample);
+		double	v;
+		if (_dirty) {
+			v = gain_adjustment(&_value);
+			const_cast<Sample *>(this)->_cached = v;
+			const_cast<Sample *>(this)->_dirty = false;
+		} else
+			v = _cached;
 		if (v == GAIN_NOT_ENOUGH_SAMPLES) throw Not_enough_samples();
 		return v;
 	}
@@ -103,7 +109,9 @@ private:
 	friend class Analyzer;
 	friend class Sample_accum;
 
-	struct replaygain_sample	_sample;
+	struct replaygain_value	_value;
+	double			_cached;
+	bool			_dirty;
 };
 
 /** An accumulation of a number of samples */
@@ -115,22 +123,25 @@ public:
 
 	/** Reset the sum to zero */
 	void reset()
-	{	memset(&_sum, 0, sizeof(_sum)); }
-
-	/** Add a sample into the accumulation
-	 *
-	 * \param sample	The sample to add
-	 */
-	void add(const Sample &sample)
-	{	*this += sample; }
-
-	/** Add a sample into the accumulation
-	 *
-	 * \param sample	The sample to add
-	 */
-	Sample_accum &operator+=(const Sample &sample)
 	{
-		gain_sample_accum(&_sum, &sample._sample);
+		_dirty = true;
+		memset(&_sum, 0, sizeof(_sum));
+	}
+
+	/** Combine result of one sample with another
+	 *
+	 * \param value	The value to add
+	 */
+	void add(const Sample &value)
+	{	*this += value; }
+
+	/** Combine result of one sample with another
+	 *
+	 * \param value	The value to add
+	 */
+	Sample_accum &operator+=(const Sample &value)
+	{
+		gain_sample_accum(&_sum, &value._value);
 		return *this;
 	}
 
@@ -144,13 +155,21 @@ public:
 	 */
 	double adjustment() const throw (Not_enough_samples)
 	{
-		double v = gain_adjustment(&_sum);
+		double	v;
+		if (_dirty) {
+			v = gain_adjustment(&_sum);
+			const_cast<Sample_accum *>(this)->_cached = v;
+			const_cast<Sample_accum *>(this)->_dirty = false;
+		} else
+			v = _cached;
 		if (v == GAIN_NOT_ENOUGH_SAMPLES) throw Not_enough_samples();
 		return v;
 	}
 
 private:
-	struct replaygain_sample	_sum;
+	struct replaygain_value	_sum;
+	double			_cached;
+	bool			_dirty;
 };
 
 /** An analyzing context */
@@ -204,11 +223,11 @@ public:
 
 	/** Return current calculation, reset context
 	 *
-	 * \param[out] out	The accumulated Replaygain sample
+	 * \param[out] out	The accumulated Replaygain value
 	 */
 	void pop(Sample *out)
 	{
-		gain_pop(_ctx, &out->_sample);
+		gain_pop(_ctx, &out->_value);
 	}
 
 private:

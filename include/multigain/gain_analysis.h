@@ -35,7 +35,7 @@
  *
  *	double				l_samples[4096];
  *	double				r_samples[4096];
- *	struct replaygain_sample	sample_accum;
+ *	struct replaygain_value	sample_accum;
  *
  *	struct replaygain_ctx		*ctx;
  *	enum replaygain_init_status	init_status;
@@ -46,7 +46,7 @@
  *	memset(&sample_accum, 0, sizeof(sample_accum));
  *
  *	for (unsigned i = 1; i <= num_songs; i++) {
- *		struct replaygain_sample	sample;
+ *		struct replaygain_value	sample;
  *		size_t				num_samples;
  *
  *		while ((num_samples = getSongSamples(ctx, song[i],
@@ -112,9 +112,9 @@ enum replaygain_init_status {
 
 struct replaygain_ctx;
 
-/** A sample or sum of samples */
-struct replaygain_sample {
-	uint32_t sample[ANALYZE_SIZE];
+/** The accumulated value of a set of samples */
+struct replaygain_value {
+	uint32_t value[ANALYZE_SIZE];
 };
 
 __BEGIN_DECLS
@@ -156,33 +156,33 @@ enum replaygain_status
  * \param[out] out	The accumulated Replaygain sample
  */
 void		gain_pop(struct replaygain_ctx *ctx,
-		    struct replaygain_sample *out);
+		    struct replaygain_value *out);
 
-/** Add one sample to another
+/** Combine result of one sample with another
  *
- * \param sum	The accumulated sample
- * \param addition	The sample to add to <code>sum</code>
+ * \param sum	The accumulated value
+ * \param addition	The value to add to <code>sum</code>
  */
-__INLINE void	gain_sample_accum(struct replaygain_sample *sum,
-		    const struct replaygain_sample *addition);
+__INLINE void	gain_sample_accum(struct replaygain_value *sum,
+		    const struct replaygain_value *addition);
 
 /** Decibal adjustment for a sample
  *
- * \param sample	A sample calculation
- * \return	 How many decibals to adjust by
+ * \param value	A value calculation
+ * \return	How many decibals to adjust by
  */
-double		gain_adjustment(const struct replaygain_sample *sample);
+double		gain_adjustment(const struct replaygain_value *value);
 
 
 
 
 
 __INLINE void
-gain_sample_accum(struct replaygain_sample *sum,
-    const struct replaygain_sample *addition)
+gain_sample_accum(struct replaygain_value *sum,
+    const struct replaygain_value *addition)
 {
 	for (size_t i = 0; i < ANALYZE_SIZE; i++)
-		sum->sample[i] += addition->sample[i];
+		sum->value[i] += addition->value[i];
 }
 
 __END_DECLS
