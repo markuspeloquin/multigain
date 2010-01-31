@@ -250,6 +250,7 @@ multigain::Mpeg_decoder::decode_frame(
 		while ((errval = mpg123_read(_hdl,
 		    reinterpret_cast<uint8_t *>(block), block_size, &done)) ==
 		    MPG123_NEW_FORMAT) {
+			std::cout << "mpg123_new_format\n";
 			// normally, this block will be executed only after
 			// the first frame; frequencies and channels don't
 			// ever really switch mid-file
@@ -283,11 +284,17 @@ multigain::Mpeg_decoder::decode_frame(
 		}
 		switch (errval) {
 		case MPG123_DONE:
+			std::cout << "mpg123_done\n";
+			if (input_done)
+				return std::make_pair(0, 0);
+			break;
 		case MPG123_NEED_MORE:
+			std::cout << "mpg123_need_more\n";
 			if (input_done)
 				return std::make_pair(0, 0);
 			break;
 		case MPG123_OK:
+			std::cout << "mpg123_ok\n";
 			// 2: bytes per frame per channel
 			assert(_last_channels);
 			frames = done / (_last_channels * 2);

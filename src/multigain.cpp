@@ -49,7 +49,7 @@ main(int argc, char **argv)
 
 		consumed = static_cast<off_t>(file.tellg()) - pos_begin;
 		counts = decoder.decode_frame(left, right, &info);
-		if (!counts.first) break;
+		if (!counts.second) break;
 		if (!frequency) {
 			frequency = info.frequency;
 			analyzer.reset(new Analyzer(frequency));
@@ -61,6 +61,8 @@ main(int argc, char **argv)
 			    << "changing frequencies is not supported\n";
 			return 1;
 		}
+
+		std::cout << counts.first << '\t' << counts.second << '\n';
 
 		if (!analyzer->add(left, right, counts.second,
 		    info.channels)) {
