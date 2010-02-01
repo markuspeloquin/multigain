@@ -104,7 +104,7 @@ struct replaygain_ctx {
 	int		freqindex;
 	int		first;
 
-	struct replaygain_value A;
+	struct replaygain_value value;
 };
 
 /* for each filter:
@@ -286,7 +286,7 @@ reset_sample_frequency(struct replaygain_ctx *ctx, long samplefreq)
 	ctx->rsum = 0.0;
 	ctx->totsamp = 0;
 
-	memset(&ctx->A, 0, sizeof(ctx->A));
+	memset(&ctx->value, 0, sizeof(ctx->value));
 
 	return REPLAYGAIN_INIT_OK;
 }
@@ -451,7 +451,7 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 			if (ival >= ANALYZE_SIZE)
 				ival = ANALYZE_SIZE - 1;
 
-			ctx->A.value[ival]++;
+			ctx->value.value[ival]++;
 			ctx->lsum = ctx->rsum = 0.0;
 			memmove(ctx->loutbuf, ctx->loutbuf + ctx->totsamp,
 			    MAX_ORDER * sizeof(Float_t));
@@ -465,7 +465,9 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 		}
 		/* XXX somehow I really screwed up: Error in programming!
 		 * Contact author about totsamp > sampleWindow
-		 * Markus: I'm not sure who wrote above note */
+		 *
+		 * Markus: I'm not sure who wrote above note or what it
+		 * means */
 		if (ctx->totsamp > ctx->sampleWindow)   
 			return REPLAYGAIN_ERROR;
 	}
@@ -515,9 +517,9 @@ gain_adjustment(const struct replaygain_value *out)
 void
 gain_pop(struct replaygain_ctx *ctx, struct replaygain_value *out)
 {
-	memcpy(out, &ctx->A, sizeof(ctx->A));
+	memcpy(out, &ctx->value, sizeof(ctx->value));
 
-	memset(&ctx->A, 0, sizeof(ctx->A));
+	memset(&ctx->value, 0, sizeof(ctx->value));
 	memset(ctx->linprebuf, 0, sizeof(Float_t) * MAX_ORDER);
 	memset(ctx->rinprebuf, 0, sizeof(Float_t) * MAX_ORDER);
 	memset(ctx->lstepbuf, 0, sizeof(Float_t) * MAX_ORDER);

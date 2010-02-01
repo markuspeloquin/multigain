@@ -1,7 +1,4 @@
-/* ReplayGainAnalysis - analyzes input samples and give the recommended dB
- * change
- *
- * Copyright (C) 2010 Markus Peloquin
+/* Copyright (C) 2010 Markus Peloquin <markus@cs.wisc.edu>
  *
  * Permission to use, copy, modify, and/or distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -15,10 +12,7 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *
- *
- * Outside this file it is LGPL.
- *
- */
+ * The rest of gain_analysis code is LGPL. */
 
 /**
  * Pseudo-code to process an album:

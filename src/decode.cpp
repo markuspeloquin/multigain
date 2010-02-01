@@ -1,3 +1,17 @@
+/* Copyright (C) 2010 Markus Peloquin <markus@cs.wisc.edu>
+ *
+ * Permission to use, copy, modify, and/or distribute this software for any
+ * purpose with or without fee is hereby granted, provided that the above
+ * copyright notice and this permission notice appear in all copies.
+ * 
+ * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY
+ * SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+ * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+ * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
+
 #include <cassert>
 #include <iostream>
 #include <memory>
@@ -232,22 +246,10 @@ multigain::Mpeg_decoder::decode_frame(
 	attempts = 0;
 	bytes = 0;
 	samples = 0;
-	do {
+	for (;;) {
 		size_t		bytes_out;
 		uint16_t	block_size;
 		uint16_t	size;
-
-		// read next MPEG frame
-		size = next_frame(frame);
-		bytes += size;
-
-		// send to decoder
-		if ((errval = mpg123_feed(_hdl, frame, size)) != MPG123_OK) {
-			// undo next_frame()'s damage
-			_pos -= size;
-			_file.seekg(_pos);
-			throw Mpg123_error(errval);
-		}
 
 		// first time, this will be zero, which is okay; it will be
 		// sorted out below
@@ -257,14 +259,14 @@ multigain::Mpeg_decoder::decode_frame(
 		default: block_size = 0;                 break;
 		}
 
-		// get decoded samples
-
-		while ((errval = mpg123_read(_hdl,
+		switch (errval = mpg123_read(_hdl,
 		    reinterpret_cast<uint8_t *>(block), block_size,
-		    &bytes_out)) == MPG123_NEW_FORMAT) {
+		    &bytes_out)) {
+		case MPG123_NEW_FORMAT: {
 			// normally, this block will be executed only after
 			// the first frame; frequencies and channels don't
-			// ever really switch mid-file
+			// ever really switch mid-file (the caller is expected
+			// to deal with those details)
 
 			long	frequency;
 			int	channels;
@@ -280,35 +282,33 @@ multigain::Mpeg_decoder::decode_frame(
 			_last_frequency = frequency;
 			_last_channels = channels;
 
-			block_size = _last_channels == 2 ?
-			    sizeof(block) : sizeof(block) / 2;
-
-/*
-			// reset format
-			if (rate) {
-				if ((errval = mpg123_format(_hdl, frequency,
-				    channels, MPG123_ENC_FLOAT_64)) !=
-				    MPG123_OK)
-					throw Mpg123_error(errval);
-			}
-*/
-		}
-		switch (errval) {
-		case MPG123_DONE:
-		case MPG123_NEED_MORE:
-			if (bytes) attempts++;
-			if (!bytes || attempts == 10)
-				return std::make_pair(0, 0);
 			break;
+		}
+		case MPG123_DONE:
 		case MPG123_OK:
-			// 2: bytes per frame per channel
-			assert(_last_channels);
 			samples = bytes_out / (_last_channels * 2);
+			assert(samples * _last_channels * 2 == bytes_out);
+			break;
+		case MPG123_NEED_MORE:
 			break;
 		default:
 			throw Mpg123_error(errval);
 		}
-	} while (!samples);
+		if (samples) break;
+
+		// read next MPEG frame
+		size = next_frame(frame);
+		bytes += size;
+		if (!size) break;
+
+		// send to decoder
+		if ((errval = mpg123_feed(_hdl, frame, size)) != MPG123_OK) {
+			// undo next_frame()'s damage
+			_pos -= size;
+			_file.seekg(_pos);
+			throw Mpg123_error(errval);
+		}
+	}
 
 	if (info) {
 		info->frequency = _last_frequency;
