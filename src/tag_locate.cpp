@@ -419,6 +419,7 @@ multigain::dump_tags(const std::list<tag_info> &tags)
 			name = "TAG_MPEG";
 			break;
 		default:
+			name = "";
 			assert(0);
 		}
 

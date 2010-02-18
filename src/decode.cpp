@@ -81,6 +81,7 @@ mpeg_bitrate_tab(enum mpeg_version version, enum mpeg_layer layer)
 		}
 	default: assert(0);
 	}
+	return 0xff;
 }
 
 /* Non-error return values in range [26,6913] */
@@ -236,9 +237,9 @@ multigain::Mpeg_decoder::decode_frame(
 
 	// decoded data; 2: channels
 	int16_t		block[MAX_SAMPLES * 2];
+	size_t		samples;
 	int		errval;
 	uint16_t	bytes;
-	uint16_t	samples;
 	// number of attempts made at end (some frame(s) read, no samples
 	// returned); I would be lying if I claimed to understand libmpg123
 	uint8_t		attempts;

@@ -1,0 +1,40 @@
+# Usage:
+#
+#  bjam [OPTIONS] [PROPERTIES] [release|debug] [install]
+#
+#  Build and install multigain.
+#
+# Targets and Related Options:
+#
+#   install                 Install to the configured locations (below).
+#   =======
+#
+#   --prefix=<PREFIX>       Install architecture independent files here.
+#                           [default=/usr/local]
+#
+#   --exec-prefix=<EPREFIX> Install architecture dependent files here.
+#                           [default=<PREFIX>]
+#
+#   --libdir=<DIR>          Install library files here.
+#                           Default: <EPREFIX>/lib
+#
+#   --includedir=<HDRDIR>   Install header files here.
+#                           Default: <PREFIX>/include
+
+# above comment shows up with `bjam --help'
+
+import package ;
+
+project src/multigain
+	: source-location src
+	: requirements <include>include
+	;
+
+package.install install
+	: # properties
+	: # binaries
+	src/gaintool
+	: # libraries
+	src/multigain
+	: # headers
+	;

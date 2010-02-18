@@ -1,1 +1,10 @@
-/multigain
+# bjam related
+/bin/
+/debug/
+/release/
+
+/gaintool
+/libmultigain.a
+/libmultigain.so
+/libmultigain.so.1
+/libmultigain.so.1.0.0

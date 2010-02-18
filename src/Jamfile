@@ -1,0 +1,49 @@
+import package ;
+#import testing ;
+
+using gcc
+	: # compiler version
+	: # c++ compile command
+	: # c++ cannot use -pedantic as <tr1/*> headers are needed
+	<cxxflags>"-std=c++98"
+	<cflags>"-std=c99 -pedantic"
+	;
+
+lib mpg123 ;
+
+lib multigain
+	:
+	decode.cpp errors.cpp gain_analysis.c tag_locate.cpp
+	mpg123
+	:
+	<include>../include
+	<define>_BSD_SOURCE
+	<define>_FILE_OFFSET_BITS=64
+
+	<variant>release:<define>NDEBUG
+	# commented out until no asserts ever fire ever in the program
+	#<variant>release:<define>NASSERT
+	<variant>debug:<define>DEBUG
+	;
+
+exe gaintool
+	:
+	gaintool.cpp
+	multigain
+	:
+	<include>../include
+	<define>_BSD_SOURCE
+	<define>_FILE_OFFSET_BITS=64
+
+	<variant>release:<define>NDEBUG
+	#<variant>release:<define>NASSERT
+	<variant>debug:<define>DEBUG
+	;
+
+install dist
+	:
+	gaintool multigain
+	:
+	<variant>release:<location>release
+	<variant>debug:<location>debug
+	;

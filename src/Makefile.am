@@ -1,10 +1,10 @@
 INCLUDES = -I$(top_srcdir)/include
 METASOURCES = AUTO
-bin_PROGRAMS = multigain
+bin_PROGRAMS = gaintool
 lib_LTLIBRARIES = libmultigain.la
-multigain_LDFLAGS = -lmultigain
-multigain_SOURCES = \
-	multigain.cpp
+gaintool_LDFLAGS = -lmultigain
+gaintool_SOURCES = \
+	gaintool.cpp
 libmultigain_la_LDFLAGS = -no-undefined -version-info 1:0:0 -lmpg123
 libmultigain_la_SOURCES = \
 	decode.cpp \
