@@ -33,37 +33,37 @@
 /**
  * Pseudo-code to process an album:
  *
- *	double				l_samples[4096];
- *	double				r_samples[4096];
+ *	double			l_samples[4096];
+ *	double			r_samples[4096];
  *	struct replaygain_value	sample_accum;
  *
- *	struct replaygain_ctx		*ctx;
- *	enum replaygain_init_status	init_status;
+ *	struct replaygain_ctx	*ctx;
+ *	enum replaygain_status	init_status;
  *
- *	if (!(ctx = gain_alloc_analysis(44100, &init_status))) {
+ *	if (!(ctx = replaygain_alloc(44100, &init_status))) {
  *		// handle error
  *	}
  *	memset(&sample_accum, 0, sizeof(sample_accum));
  *
  *	for (unsigned i = 1; i <= num_songs; i++) {
  *		struct replaygain_value	sample;
- *		size_t				num_samples;
+ *		size_t			num_samples;
  *
  *		while ((num_samples = getSongSamples(ctx, song[i],
  *		    l_samples, r_samples)) > 0) {
- *			gain_analyze_samples(ctx, l_samples, r_samples,
+ *			replaygain_analyze(ctx, l_samples, r_samples,
  *			    num_samples, 2);
  *		}
  *
- *		gain_pop(ctx, &sample);
- *		gain_accum(&sample_accum, &sample);
+ *		replaygain_pop(ctx, &sample);
+ *		replaygain_accum(&sample_accum, &sample);
  *
  *		printf("Recommended dB change for song %2d: %+6.2f dB\n",
- *		    i, gain_adjustment(&sample));
+ *		    i, replaygain_adjustment(&sample));
  *	}
  *	printf("Recommended dB change for whole album: %+6.2f dB\n",
- *	    gain_adjustment(&sample_accum));
- *	free(ctx);
+ *	    replaygain_adjustment(&sample_accum));
+ *	replaygain_free(ctx);
  */
 
 #ifndef MULTIGAIN_GAIN_ANALYSIS_H
@@ -101,13 +101,9 @@ const double	GAIN_NOT_ENOUGH_SAMPLES = -24601.;
 
 enum replaygain_status {
 	REPLAYGAIN_ERROR,
-	REPLAYGAIN_OK
-};
-
-enum replaygain_init_status {
-	REPLAYGAIN_INIT_ERR_MEM,	/**< Out of memory */
-	REPLAYGAIN_INIT_ERR_SAMPLEFREQ,	/**< Unsupported sampling frequency */
-	REPLAYGAIN_INIT_OK
+	REPLAYGAIN_OK,
+	REPLAYGAIN_ERR_MEM,	/**< Out of memory */
+	REPLAYGAIN_ERR_SAMPLEFREQ,	/**< Unsupported sampling frequency */
 };
 
 struct replaygain_ctx;
@@ -125,12 +121,25 @@ __BEGIN_DECLS
  * \param[out] out_status	An error/success indicator
  * \retval NULL	An error occurred; check <code>out_status</code> for an
  *	explanation
- * \return	The context, which must be passed to <code>free()</code> when
- *	finished
+ * \return	The context, which must be passed to
+ *	<code>replaygain_free()</code> when finished
  */
 struct replaygain_ctx *
-		gain_alloc_analysis(long samplefreq,
-		    enum replaygain_init_status *out_status);
+		replaygain_alloc(long samplefreq,
+		    enum replaygain_status *out_status);
+
+__INLINE void	replaygain_free(struct replaygain_ctx *ctx);
+
+/** Reset the sampling frequency
+ *
+ * \param ctx	    The replaygain context
+ * \param freq	    The frequency to reset to
+ * \retval REPLAYGAIN_ERR_SAMPLEFREQ
+ * \retval REPLAYGAIN_OK
+ */
+enum replaygain_status
+		replaygain_reset_frequency(struct replaygain_ctx *ctx,
+		    long freq);
 
 /** Accumulate samples into a calculation
  *
@@ -146,7 +155,7 @@ struct replaygain_ctx *
  *	error
  */
 enum replaygain_status
-		gain_analyze_samples(struct replaygain_ctx *ctx,
+		replaygain_analyze(struct replaygain_ctx *ctx,
 		    const double *left_samples, const double *right_samples,
 		    size_t num_samples, int num_channels);
 
@@ -155,7 +164,7 @@ enum replaygain_status
  * \param ctx	Analyzing context
  * \param[out] out	The accumulated Replaygain sample
  */
-void		gain_pop(struct replaygain_ctx *ctx,
+void		replaygain_pop(struct replaygain_ctx *ctx,
 		    struct replaygain_value *out);
 
 /** Combine result of one sample with another
@@ -163,7 +172,7 @@ void		gain_pop(struct replaygain_ctx *ctx,
  * \param sum	The accumulated value
  * \param addition	The value to add to <code>sum</code>
  */
-__INLINE void	gain_sample_accum(struct replaygain_value *sum,
+__INLINE void	replaygain_accum(struct replaygain_value *sum,
 		    const struct replaygain_value *addition);
 
 /** Decibal adjustment for a sample
@@ -171,14 +180,19 @@ __INLINE void	gain_sample_accum(struct replaygain_value *sum,
  * \param value	A value calculation
  * \return	How many decibals to adjust by
  */
-double		gain_adjustment(const struct replaygain_value *value);
-
+double		replaygain_adjustment(const struct replaygain_value *value);
 
 
 
 
 __INLINE void
-gain_sample_accum(struct replaygain_value *sum,
+replaygain_free(struct replaygain_ctx *ctx)
+{
+	free(ctx);
+}
+
+__INLINE void
+replaygain_accum(struct replaygain_value *sum,
     const struct replaygain_value *addition)
 {
 	for (size_t i = 0; i < ANALYZE_SIZE; i++)

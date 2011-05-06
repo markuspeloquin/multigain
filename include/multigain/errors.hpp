@@ -29,6 +29,7 @@ struct Bad_samplefreq : public std::exception {
 struct Decode_error : std::exception {
 	Decode_error(const std::string &msg) : _msg("Decode error: ")
 	{	_msg += msg; }
+	Decode_error() {}
 	~Decode_error() throw () {}
 	const char *what() const throw ()
 	{	return _msg.c_str(); }
@@ -45,12 +46,27 @@ struct Disk_error : std::exception {
 	std::string _msg;
 };
 
-struct Mpg123_error : public std::exception {
+struct Mpg123_error : std::exception {
+	Mpg123_error(const std::string &msg, int errval);
 	Mpg123_error(int errval);
 	const char *what() const throw ()
 	{	return _msg.c_str(); }
 	virtual ~Mpg123_error() throw () {}
 	std::string _msg;
+};
+
+struct Mpg123_decode_error : Mpg123_error, Decode_error {
+	Mpg123_decode_error(const std::string &msg, int errval) :
+		Mpg123_error(msg, errval),
+		Decode_error()
+	{}
+	Mpg123_decode_error(int errval) :
+		Mpg123_error(errval),
+		Decode_error()
+	{}
+	const char *what() const throw ()
+	{	return Mpg123_error::what(); }
+	virtual ~Mpg123_decode_error() throw () {}
 };
 
 struct Not_enough_samples : public std::exception {

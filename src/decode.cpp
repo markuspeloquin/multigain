@@ -14,6 +14,7 @@
 
 #include <cassert>
 #include <iostream>
+#include <limits>
 #include <memory>
 
 #include <mpg123.h>
@@ -24,20 +25,6 @@
 
 namespace multigain {
 namespace {
-
-enum mpeg_version {
-	MPEG_V_2_5 = 0x0,
-	MPEG_V_RESERVED = 0x1,
-	MPEG_V_2 = 0x2,
-	MPEG_V_1 = 0x3
-};
-
-enum mpeg_layer {
-	MPEG_L_RESERVED = 0x0,
-	MPEG_L_3 = 0x1,
-	MPEG_L_2 = 0x2,
-	MPEG_L_1 = 0x3
-};
 
 /** For indexing, see <code>mpeg_bitrate_tab()</code> */
 int16_t MPEG_BITRATE[5][16] = {
@@ -59,80 +46,59 @@ int32_t MPEG_FREQ[4][4] = {
     { 44100, 48000, 32000,  0 }
 };
 
+uint8_t MPEG_INTENSITY_BAND[4] = {
+	4, 8, 12, 16
+};
+
+class Mpg123_lib {
+public:
+	static void init() throw (Mpg123_error)
+	{
+		int ret;
+		if ((ret = mpg123_init()) != MPG123_OK)
+			throw Mpg123_error(ret);
+		_instance._valid = true;
+	}
+
+private:
+	Mpg123_lib() : _valid(false) {}
+	~Mpg123_lib()
+	{
+		if (_valid) mpg123_exit();
+	}
+
+	Mpg123_lib(const Mpg123_lib &) {}
+	void operator=(const Mpg123_lib &) {}
+
+	static Mpg123_lib _instance;
+	bool _valid;
+};
+Mpg123_lib Mpg123_lib::_instance;
+
 /** Returns an index into <code>MPEG_BITRATE</code> */
 inline uint8_t
-mpeg_bitrate_tab(enum mpeg_version version, enum mpeg_layer layer)
+mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
+    enum Mpeg_frame_header::layer_type layer)
 {
 	switch (version) {
-	case MPEG_V_1:
+	case Mpeg_frame_header::VERS_1:
 		switch (layer) {
-		case MPEG_L_1: return 0;
-		case MPEG_L_2: return 1;
-		case MPEG_L_3: return 2;
+		case Mpeg_frame_header::LAYER_1: return 0;
+		case Mpeg_frame_header::LAYER_2: return 1;
+		case Mpeg_frame_header::LAYER_3: return 2;
 		default: assert(0);
 		}
-	case MPEG_V_2:
-	case MPEG_V_2_5:
+	case Mpeg_frame_header::VERS_2:
+	case Mpeg_frame_header::VERS_2_5:
 		switch (layer) {
-		case MPEG_L_1: return 3;
-		case MPEG_L_2: return 4;
-		case MPEG_L_3: return 4;
+		case Mpeg_frame_header::LAYER_1: return 3;
+		case Mpeg_frame_header::LAYER_2: return 4;
+		case Mpeg_frame_header::LAYER_3: return 4;
 		default: assert(0);
 		}
 	default: assert(0);
 	}
 	return 0xff;
-}
-
-/* Non-error return values in range [26,6913] */
-bool
-mpeg_parse_frame_header(const uint8_t header[4],
-    uint32_t &out_bps,
-    uint16_t &out_frequency,
-    uint8_t &out_channels,
-    uint16_t &out_size)
-{
-	int32_t			frequency;
-	int32_t			bitrate;
-	uint8_t			chan_mode;
-	enum mpeg_layer		layer;
-	enum mpeg_version	version;
-	bool			padded;
-
-	// verify frame sync
-	if (header[0] != 0xff || (header[1] & 0xe0) != 0xe0)
-		return false;
-
-	// -------- ---VVLL- BBBBFFP- CC------
-	version = static_cast<enum mpeg_version>((header[1] >> 3) & 0x3);
-	layer = static_cast<enum mpeg_layer>((header[1] >> 1) & 0x3);
-	bitrate = header[2] >> 4;
-	frequency = (header[2] >> 2) & 0x3;
-	padded = (header[2] & 0x2) != 0;
-	chan_mode = header[3] >> 6;
-
-	// translate bitrate, frequency
-	bitrate = MPEG_BITRATE[mpeg_bitrate_tab(version, layer)][bitrate];
-	frequency = MPEG_FREQ[version][frequency];
-
-	if (bitrate <= 0) return false;
-	if (frequency <= 0) return false;
-
-	switch (chan_mode) {
-	case 0x3:
-		out_channels = 1;
-		break;
-	default:
-		out_channels = 2;
-	}
-
-	out_bps = bitrate *= 1000;
-	out_frequency = frequency;
-	if (layer == MPEG_L_1)
-		out_size = ( 12 * bitrate / frequency + padded) * 4;
-	else
-		out_size =  144 * bitrate / frequency + padded;
-	return true;
 }
 
 void
@@ -149,6 +115,31 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 	}
 }
 
+// these are usually LAME tags, which should be skipped over for replaygain
+// analysis
+bool
+is_lame(const uint8_t *frame, size_t sz)
+{
+	// http://gabriel.mp3-tech.org/mp3infotag.html
+
+	//const size_t INFO_OFFSET = 0x24;
+	// the LAME tag would start at 0x9c, though it's not required to (it
+	// could just be absent)
+	const size_t MIN_SIZE = 0x9c;
+
+	const uint8_t *begin = frame;
+	while (!*begin) ++begin;
+	if (begin == frame) return false;
+
+	// I really wonder how plain MP3 players find their way around this;
+	// 'Xing' is for VBR, 'Info' for CBR
+	return sz >= MIN_SIZE && (
+	    std::equal(begin, begin + 4,
+	    reinterpret_cast<const uint8_t *>("Xing")) ||
+	    std::equal(begin, begin + 4,
+	    reinterpret_cast<const uint8_t *>("Info")));
+}
+
 } // end anon
 } // end multigain
 
@@ -156,21 +147,14 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file,
     off_t media_begin, off_t media_end) throw (Disk_error, Mpg123_error) :
 	_file(file),
 	_pos(media_begin),
-	_end(media_end),
-	_last_frequency(0),
-	_last_channels(0)
+	_end(media_end)
 {
-	static bool	mpg123_initialized = false;
 	int		errval;
+
+	Mpg123_lib::init();
 
 	if (!_file.seekg(_pos))
 		throw Disk_error("seek error");
-
-	if (!mpg123_initialized) {
-		if ((errval = mpg123_init()) != MPG123_OK)
-			throw Mpg123_error(errval);
-		mpg123_initialized = true;
-	}
 
 	if (!(_hdl = mpg123_new(0, &errval)))
 		throw Mpg123_error(errval);
@@ -186,14 +170,11 @@ multigain::Mpeg_decoder::~Mpeg_decoder()
 }
 
 size_t
-multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME])
+multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
     throw (Disk_error)
 {
 	char		*buf = reinterpret_cast<char *>(frame);
-	uint32_t	bps;
-	uint16_t	frequency;
 	uint16_t	size;
-	uint8_t		channels;
 
 	// read/parse header
 
@@ -207,7 +188,10 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME])
 		return 0;
 	}
 
-	if (!mpeg_parse_frame_header(frame, bps, frequency, channels, size)) {
+	try {
+		Mpeg_frame_header header(frame, true);
+		size = header.size();
+	} catch (Mpeg_frame_header::Bad_header) {
 		// not a real frame header
 		_end = _pos;
 		_file.seekg(_pos);
@@ -227,100 +211,180 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME])
 }
 
 std::pair<size_t, size_t>
-multigain::Mpeg_decoder::decode_frame(
-    double left[MAX_SAMPLES], double right[MAX_SAMPLES],
-    struct decode_info *info)
-    throw (Decode_error, Disk_error, Mpg123_error)
+multigain::Mpeg_decoder::decode_frame(Frame *frame)
+    throw (Decode_error, Disk_error)
 {
 	// encoded data
-	uint8_t		frame[MAX_FRAME];
+	uint8_t		frame_encoded[MAX_FRAME_LEN];
 
-	// decoded data; 2: channels
-	int16_t		block[MAX_SAMPLES * 2];
-	size_t		samples;
-	int		errval;
-	uint16_t	bytes;
-	// number of attempts made at end (some frame(s) read, no samples
-	// returned); I would be lying if I claimed to understand libmpg123
-	uint8_t		attempts;
+	size_t bytes;
+	size_t sz_sample = sizeof(int16_t) * frame->channels();
+	size_t sz_buf = frame->len() * sz_sample;
+	size_t sz_consumed = 0;
+	size_t samples = 0;
+	int ret;
+	bool eof = false;
 
-	attempts = 0;
-	bytes = 0;
-	samples = 0;
-	for (;;) {
-		size_t		bytes_out;
-		uint16_t	block_size;
-		uint16_t	size;
+	do {
+		off_t	frame_num;
+		int16_t	*audio;
 
-		// first time, this will be zero, which is okay; it will be
-		// sorted out below
-		switch (_last_channels) {
-		case 2:  block_size = sizeof(block);     break;
-		case 1:  block_size = sizeof(block) / 2; break;
-		default: block_size = 0;                 break;
+		// dereference frame->samples()
+		ret = mpg123_decode_frame(_hdl, &frame_num,
+		    reinterpret_cast<uint8_t **>(&audio), &bytes);
+		if (bytes) {
+			int16_t	**sample_bufs = frame->samples();
+			samples = bytes / sz_sample;
+			assert(samples * sz_sample == bytes);
+
+			// copy decoded data into Frame structure
+			if (frame->channels() == 1) {
+				std::copy(audio, audio + samples,
+				    sample_bufs[0]);
+			} else {
+				assert(frame->channels() == 2);
+
+				int16_t *p = audio;
+				for (size_t i = 0; i < samples; i++) {
+					sample_bufs[0][i] = *p++;
+					sample_bufs[1][i] = *p++;
+				}
+			}
+			frame->frameno(frame_num);
+			// overflow
+			assert(frame->frameno() == frame_num);
 		}
 
-		switch (errval = mpg123_read(_hdl,
-		    reinterpret_cast<uint8_t *>(block), block_size,
-		    &bytes_out)) {
-		case MPG123_NEW_FORMAT: {
-			// normally, this block will be executed only after
-			// the first frame; frequencies and channels don't
-			// ever really switch mid-file (the caller is expected
-			// to deal with those details)
+		switch (ret) {
+		case MPG123_OK:
+			break;
+		case MPG123_NEW_FORMAT:
+		{
+			long rate;
+			int channels;
+			int encoding;
 
-			long	frequency;
-			int	channels;
-			int	encoding;
+			if ((ret = mpg123_getformat(_hdl, &rate, &channels,
+			    &encoding)))
+				throw Mpg123_decode_error(
+				    "on mpg123_getformat", ret);
 
-			if ((errval = mpg123_getformat(_hdl,
-			    &frequency, &channels, &encoding)) != MPG123_OK)
-				throw Mpg123_error(errval);
+			assert(rate > 0 &&
+			    rate <= std::numeric_limits<uint16_t>::max());
+			assert(channels > 0 &&
+			    channels <= std::numeric_limits<uint8_t>::max());
 
-			if (encoding && encoding != MPG123_ENC_SIGNED_16)
-				throw Decode_error("unexpected encoding");
+			// reset encoding to int16_t
+			if (encoding != MPG123_ENC_SIGNED_16 &&
+			    (ret = mpg123_format(_hdl, rate, channels,
+			    MPG123_ENC_SIGNED_16)))
+				throw Mpg123_decode_error(
+				    "on mpg123_format", ret);
 
-			_last_frequency = frequency;
-			_last_channels = channels;
+			assert(!samples);
+			frame->init(MAX_SAMPLES * 2, channels, rate);
+			sz_sample = sizeof(int16_t) * channels;
+			sz_buf = frame->len() * sz_sample;
 
+			break;
+		}
+		case MPG123_NEED_MORE:
+		{
+			// read next MPEG frame
+			size_t size = next_frame(frame_encoded);
+			if (!size) {
+				eof = true;
+				break;
+			}
+			sz_consumed += size;
+
+			// send to decoder
+			if ((ret = mpg123_feed(_hdl, frame_encoded, size))
+			    != MPG123_OK) {
+				// undo next_frame()'s damage
+				_file.seekg(_pos -= size);
+				throw Mpg123_decode_error(ret);
+			}
 			break;
 		}
 		case MPG123_DONE:
-		case MPG123_OK:
-			samples = bytes_out / (_last_channels * 2);
-			assert(samples * _last_channels * 2 == bytes_out);
-			break;
-		case MPG123_NEED_MORE:
-			break;
+			// shouldn't happen with feeding
 		default:
-			throw Mpg123_error(errval);
+			throw Mpg123_decode_error("on mpg123_read", ret);
 		}
-		if (samples) break;
+	} while (!eof && !samples);
 
-		// read next MPEG frame
-		size = next_frame(frame);
-		bytes += size;
-		if (!size) break;
+	std::cout << "returning (" << sz_consumed << ", " << samples << ")\n";
+	return std::make_pair(sz_consumed, samples);
+}
 
-		// send to decoder
-		if ((errval = mpg123_feed(_hdl, frame, size)) != MPG123_OK) {
-			// undo next_frame()'s damage
-			_pos -= size;
-			_file.seekg(_pos);
-			throw Mpg123_error(errval);
+void
+multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal)
+    throw (Bad_header)
+{
+	// verify frame sync
+	if (header[0] != 0xff || (header[1] & 0xe0) != 0xe0)
+		throw Bad_header();
+
+	// -------- ---VVLLP BBBBFFPp CCMMCOEE
+	_version = static_cast<enum version_type>((header[1] >> 3) & 0x3);
+	if (_version == VERS_RESERVED)
+		throw Bad_header();
+	_layer = static_cast<enum layer_type>((header[1] >> 1) & 0x3);
+	if (_layer == LAYER_RESERVED)
+		throw Bad_header();
+	_bitrate = header[2] >> 4;
+	_frequency = (header[2] >> 2) & 0x3;
+	_padded = (header[2] & 0x2) == 0x2;
+
+	// don't bother checking for invalid modes
+	_chan_mode = static_cast<enum channel_mode_type>(header[3] >> 6);
+
+	if (minimal) {
+		_has_crc = false;
+		_priv = false;
+		_intensity_band = 0;
+		_intensity_stereo = false;
+		_ms_stereo = false;
+		_copyright = false;
+		_original = false;
+		_emphasis = EMPH_NONE;
+	} else {
+		_has_crc = header[1] & 0x1;
+		_priv = header[2] & 0x1;
+		if (_chan_mode == CHAN_JOINT_STEREO) {
+			if (_layer == LAYER_3) {
+				_intensity_band = 0;
+				_intensity_stereo = (header[3] >> 5) & 0x1;
+				_ms_stereo = (header[3] >> 4) & 0x1;
+			} else {
+				_intensity_band = MPEG_INTENSITY_BAND[
+				    (header[3] >> 4) & 0x3];
+				_intensity_stereo = false;
+				_ms_stereo = false;
+			}
+		} else {
+			_intensity_band = 0;
+			_intensity_stereo = false;
+			_ms_stereo = false;
 		}
+		_copyright = (header[3] >> 3) == 0x1;
+		_original = (header[3] >> 2) == 0x1;
+		_emphasis = static_cast<enum emphasis_type>(header[3] & 0x3);
 	}
 
-	if (info) {
-		info->frequency = _last_frequency;
-		info->channels = _last_channels;
-	}
+	// translate bitrate, frequency
+	_bitrate = MPEG_BITRATE[mpeg_bitrate_tab(_version, _layer)][_bitrate];
+	if (_bitrate <= 0)
+		throw Bad_header();
+	_bitrate *= 1000;
 
-	if (_last_channels == 2) {
-		sample_translate(block, samples, 2, left);
-		sample_translate(block + 1, samples, 2, right);
-	} else
-		sample_translate(block, samples, 1, left);
+	_frequency = MPEG_FREQ[_version][_frequency];
+	if (_frequency <= 0)
+		throw Bad_header();
 
-	return std::make_pair(bytes, samples);
+	if (_layer == LAYER_1)
+		_size = (12 * _bitrate / _frequency + _padded) * 4;
+	else
+		_size = 144 * _bitrate / _frequency + _padded;
 }

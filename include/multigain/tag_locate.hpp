@@ -33,7 +33,9 @@ enum tag_type {
 	TAG_ID3_2_3,		/**< ID3-2.3 */
 	TAG_ID3_2_4,		/**< ID3-2.4 */
 	TAG_ID3_2_UNDEFINED,	/**< An ID3-2.x tag with a known size */
-	TAG_MPEG		/**< Not a tag, but an MPEG frame */
+	TAG_MPEG,		/**< Not a tag, but an MPEG frame */
+	TAG_MP3_INFO,
+	TAG_MP3_XING
 };
 
 /** Type and boundary of a tag */
@@ -45,6 +47,17 @@ struct tag_info {
 	off_t		start;
 	size_t		size;
 	enum tag_type	type;
+
+	union {
+		struct {
+			// only for TAG_MP3_INFO or TAG_MP3_XING
+			uint16_t	skip_front;
+			uint16_t	skip_back;
+		} info;
+
+		// only for TAG_MPEG
+		uint32_t	count;
+	} extra;
 };
 
 /** Find the types and boundaries of the tags in a file

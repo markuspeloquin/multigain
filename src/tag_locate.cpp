@@ -18,7 +18,10 @@
 #include <algorithm>
 #include <iostream>
 
+#include <boost/scoped_array.hpp>
+
 #include <multigain/tag_locate.hpp>
+#include <multigain/decode.hpp>
 
 namespace multigain {
 namespace {
@@ -88,6 +91,17 @@ inline uint32_t
 buf_unsafe32(const uint8_t buf[4])
 {
 	return buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
+}
+
+inline void
+find_skip_amounts(const uint8_t *info, tag_info *tag_info)
+{
+	// LAME tag at 0x78
+	const uint8_t *skip = info + 0x78 + 0x15;
+	tag_info->extra.info.skip_front =
+	    (static_cast<uint16_t>(skip[0]) << 4) | (skip[1] >> 4);
+	tag_info->extra.info.skip_back =
+	    ((static_cast<uint16_t>(skip[1]) & 0xf) << 8) | skip[2];
 }
 
 void
@@ -286,35 +300,111 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 
 	std::list<tag_info>::iterator	iter_media;
 
-	// prefix tags
-	for (pos = 0;;) {
-		if (!in.seekg(pos, std::ios_base::beg))
-			throw Disk_error("seek error");
-		if (!in.read(reinterpret_cast<char *>(buf), 8))
-			throw Disk_error("read error");
+	boost::scoped_array<uint8_t> mpeg_frame;
+	size_t sz_frame = 0;
 
-		// indicate to skip_*() functions where to start looking
+	// prefix tags
+	pos = 0;
+	for (;;) {
 		if (!in.seekg(pos, std::ios_base::beg))
 			throw Disk_error("seek error");
+		if (!in.read(reinterpret_cast<char *>(buf), 8)) {
+			if (!out_tags.empty() &&
+			    out_tags.back().type == TAG_MPEG && in.eof())
+				break;
+			throw Disk_error("read error");
+		}
 
 		if (buf[0] == 0xff && (buf[1] & 0xf0) == 0xf0) {
-			// start of MP3 data
-			out_tags.push_back(tag_info(TAG_MPEG, pos, 0));
-			--(iter_media = out_tags.end());
-			break;
-		} else if (std::equal(buf, buf + 3, "ID3")) {
-			skip_id3_2(in, false, out_tags);
-			pos += out_tags.back().size;
-		} else if (std::equal(buf, buf + 8, "APETAGEX")) {
-			skip_ape_2(in, false, out_tags);
-			pos += out_tags.back().size;
+			// MPEG frame
+			uint16_t	size;
+
+			try {
+				Mpeg_frame_header frame_header(buf, true);
+				size = frame_header.size();
+			} catch (Mpeg_frame_header::Bad_header) {
+				throw Unsupported_tag("bad MPEG frame");
+			}
+
+			// allocate a buffer for MPEG frames
+			if (sz_frame < size) {
+				sz_frame = size;
+				mpeg_frame.reset(new uint8_t[size]);
+			}
+
+			// read the whole frame
+			if (!in.seekg(pos, std::ios_base::beg))
+				throw Disk_error("seek error");
+			if (!in.read(
+			    reinterpret_cast<char *>(mpeg_frame.get()), size))
+				throw Disk_error("read error");
+
+			// this should advance at least once; I've seen a
+			// standard claim there are 0x20 bytes of padding, but
+			// ref_pink.mp3 has just 0x11 bytes
+			uint8_t *info = mpeg_frame.get() + 4;
+			while (!*info) ++info;
+			bool some_zeros = info != mpeg_frame.get() + 4;
+
+			if (some_zeros &&
+			    std::equal(info, info + 4, "Xing")) {
+				// MP3 Xing tag
+				// add back frame header
+				out_tags.push_back(
+				    tag_info(TAG_MP3_XING, pos, size));
+
+				find_skip_amounts(info, &out_tags.back());
+
+				pos += size;
+			} else if (some_zeros &&
+			    std::equal(info, info + 4, "Info")) {
+				// MP3 Info tag
+				// add back frame header
+				out_tags.push_back(
+				    tag_info(TAG_MP3_INFO, pos, size));
+
+				find_skip_amounts(info, &out_tags.back());
+
+				pos += size;
+			} else {
+				// start of MP3 data
+				if (!out_tags.empty() &&
+				    out_tags.back().type == TAG_MPEG)
+					iter_media->extra.count++;
+				else {
+					out_tags.push_back(
+					    tag_info(TAG_MPEG, pos, 0));
+					out_tags.back().extra.count = 0;
+					--(iter_media = out_tags.end());
+				}
+				pos += size;
+			}
 		} else {
-			// maybe APE 1?  if it isn't, go on a wild ride
-			if (!skip_ape_1(in, out_tags))
+			if (!out_tags.empty() &&
+			    out_tags.back().type == TAG_MPEG)
+				break;
+			else if (std::equal(buf, buf + 3, "ID3")) {
+				if (!in.seekg(pos, std::ios_base::beg))
+					throw Disk_error("seek error");
+				skip_id3_2(in, false, out_tags);
+				pos += out_tags.back().size;
+			} else if (std::equal(buf, buf + 8, "APETAGEX")) {
+				if (!in.seekg(pos, std::ios_base::beg))
+					throw Disk_error("seek error");
+				skip_ape_2(in, false, out_tags);
+				pos += out_tags.back().size;
+			} else
 				throw Unsupported_tag(
 				    "completely unrecognized");
-			pos += out_tags.back().size;
 		}
+	}
+
+	// end of MPEG data, the rest should be
+	// scanned in reverse
+	iter_media->size = pos - iter_media->start;
+	if (in.eof()) {
+		in.clear();
+		return;
 	}
 
 	// seek to end to check for trailing tags; I'm certainly abusing the
@@ -377,8 +467,6 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 		// no other tags found, so must have found all
 		break;
 	}
-
-	iter_media->size = pos - iter_media->start;
 }
 
 void
@@ -417,6 +505,12 @@ multigain::dump_tags(const std::list<tag_info> &tags)
 			break;
 		case TAG_MPEG:
 			name = "TAG_MPEG";
+			break;
+		case TAG_MP3_INFO:
+			name = "TAG_MP3_INFO";
+			break;
+		case TAG_MP3_XING:
+			name = "TAG_MP3_XING";
 			break;
 		default:
 			name = "";

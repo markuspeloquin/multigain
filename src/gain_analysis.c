@@ -46,6 +46,7 @@
  * Optimization/clarity suggestions are welcome.
  */
 
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -60,7 +61,7 @@
 /* percentile which is louder than the proposed level */
 const double RMS_PERCENTILE =	0.95;
 /* maximum allowed sample frequency [Hz] */
-#define MAX_SAMP_FREQ		48000.0
+#define MAX_SAMP_FREQ		48000
 /* Time slice size [s] */
 #define RMS_WINDOW_TIME_NUM	1
 #define RMS_WINDOW_TIME_DEN	20
@@ -68,9 +69,9 @@ const double RMS_PERCENTILE =	0.95;
 
 #define MAX_ORDER		(BUTTER_ORDER > YULE_ORDER ? BUTTER_ORDER : YULE_ORDER)
 /* max. Samples per Time slice */
-#define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME_NUM / RMS_WINDOW_TIME_DEN)
+#define MAX_SAMPLES_PER_WINDOW	(size_t)(MAX_SAMP_FREQ * RMS_WINDOW_TIME_NUM / RMS_WINDOW_TIME_DEN + 1) // FIXME should there be a +1 in here?
 
-/* calibration value */
+/* calibration value; ref_pink.wav must get 6.0 dB */
 const double PINK_REF =		64.82; /* 298640883795 */
 
 /* Type used for filtering */
@@ -252,8 +253,8 @@ filter_butter(const Float_t *input, Float_t *output, size_t nSamples,
 	}
 }
 
-static enum replaygain_init_status
-reset_sample_frequency(struct replaygain_ctx *ctx, long samplefreq)
+enum replaygain_status
+replaygain_reset_frequency(struct replaygain_ctx *ctx, long freq)
 {
 	/* zero out initial values */
 	memset(ctx->linprebuf, 0, sizeof(Float_t) * MAX_ORDER);
@@ -263,7 +264,7 @@ reset_sample_frequency(struct replaygain_ctx *ctx, long samplefreq)
 	memset(ctx->loutbuf, 0, sizeof(Float_t) * MAX_ORDER);
 	memset(ctx->routbuf, 0, sizeof(Float_t) * MAX_ORDER);
 
-	switch (samplefreq) {
+	switch (freq) {
 	case 48000: ctx->freqindex = 0; break;
 	case 44100: ctx->freqindex = 1; break;
 	case 32000: ctx->freqindex = 2; break;
@@ -274,12 +275,12 @@ reset_sample_frequency(struct replaygain_ctx *ctx, long samplefreq)
 	case 11025: ctx->freqindex = 7; break;
 	case  8000: ctx->freqindex = 8; break;
 	default:
-		return REPLAYGAIN_INIT_ERR_SAMPLEFREQ;
+		return REPLAYGAIN_ERR_SAMPLEFREQ;
 	}
 
-	/* ceil(samplefreq * (float)NUM/DEN) */
+	/* ceil(freq * (float)NUM/DEN) */
 	ctx->sampleWindow =
-	    (samplefreq * RMS_WINDOW_TIME_NUM + RMS_WINDOW_TIME_DEN - 1) /
+	    (freq * RMS_WINDOW_TIME_NUM + RMS_WINDOW_TIME_DEN-1) /
 	    RMS_WINDOW_TIME_DEN;
 
 	ctx->lsum = 0.0;
@@ -288,22 +289,22 @@ reset_sample_frequency(struct replaygain_ctx *ctx, long samplefreq)
 
 	memset(&ctx->value, 0, sizeof(ctx->value));
 
-	return REPLAYGAIN_INIT_OK;
+	return REPLAYGAIN_OK;
 }
 
 struct replaygain_ctx *
-gain_alloc_analysis(long samplefreq, enum replaygain_init_status *out_status)
+replaygain_alloc(long freq, enum replaygain_status *out_status)
 {
-	struct replaygain_ctx		*ctx;
-	enum replaygain_init_status	status;
+	struct replaygain_ctx	*ctx;
+	enum replaygain_status	status;
 
 	if (!(ctx = malloc(sizeof(struct replaygain_ctx)))) {
-		if (out_status) *out_status = REPLAYGAIN_INIT_ERR_MEM;
+		if (out_status) *out_status = REPLAYGAIN_ERR_MEM;
 		return 0;
 	}
 
-	status = reset_sample_frequency(ctx, samplefreq);
-	if (status != REPLAYGAIN_INIT_OK) {
+	status = replaygain_reset_frequency(ctx, freq);
+	if (status != REPLAYGAIN_OK) {
 		free(ctx);
 		if (out_status) *out_status = status;
 		return 0;
@@ -316,7 +317,7 @@ gain_alloc_analysis(long samplefreq, enum replaygain_init_status *out_status)
 	ctx->lout   = ctx->loutbuf   + MAX_ORDER;
 	ctx->rout   = ctx->routbuf   + MAX_ORDER;
 
-	if (out_status) *out_status = REPLAYGAIN_INIT_OK;
+	if (out_status) *out_status = REPLAYGAIN_OK;
 	return ctx;
 }
 
@@ -327,10 +328,11 @@ fsqr(const Float_t d)
 }
 
 enum replaygain_status
-gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
+replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
     const Float_t *rsamples, size_t num_samples, int channels)
 {
 	long		batchsamples;
+	size_t		copy_samples;
 	long		cursamplepos;
 
 	if (!num_samples)
@@ -345,17 +347,12 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 	default: return REPLAYGAIN_ERROR;
 	}
 
-	if (num_samples < MAX_ORDER) {
-		memcpy(ctx->linprebuf + MAX_ORDER, lsamples,
-		    num_samples * sizeof(Float_t));
-		memcpy(ctx->rinprebuf + MAX_ORDER, rsamples,
-		    num_samples * sizeof(Float_t));
-	} else {
-		memcpy(ctx->linprebuf + MAX_ORDER, lsamples,
-		    MAX_ORDER * sizeof(Float_t));
-		memcpy(ctx->rinprebuf + MAX_ORDER, rsamples,
-		    MAX_ORDER * sizeof(Float_t));
-	}
+	copy_samples = num_samples;
+	if (MAX_ORDER < copy_samples) copy_samples = MAX_ORDER;
+	memcpy(ctx->linprebuf + MAX_ORDER, lsamples,
+	    copy_samples * sizeof(Float_t));
+	memcpy(ctx->rinprebuf + MAX_ORDER, rsamples,
+	    copy_samples * sizeof(Float_t));
 
 	while (batchsamples > 0) {
 		const Float_t	*curleft;
@@ -447,7 +444,7 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 			    (ctx->lsum + ctx->rsum) / (ctx->totsamp * 2) +
 			    1.0e-37);
 
-			ival = val < 0 ? 0 : val;
+			ival = val < 0.0 ? 0 : val;
 			if (ival >= ANALYZE_SIZE)
 				ival = ANALYZE_SIZE - 1;
 
@@ -467,7 +464,7 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 		 * Contact author about totsamp > sampleWindow
 		 *
 		 * Markus: I'm not sure who wrote above note or what it
-		 * means */
+		 * means; maybe it's an assertion */
 		if (ctx->totsamp > ctx->sampleWindow)   
 			return REPLAYGAIN_ERROR;
 	}
@@ -493,7 +490,7 @@ gain_analyze_samples(struct replaygain_ctx *ctx, const Float_t *lsamples,
 }
 
 Float_t
-gain_adjustment(const struct replaygain_value *out)
+replaygain_adjustment(const struct replaygain_value *out)
 {
 	uint32_t	elems;
 	int32_t		upper;
@@ -510,12 +507,13 @@ gain_adjustment(const struct replaygain_value *out)
 		if ((upper -= out->value[i]) <= 0)
 			break;
 	}
+	assert(i < ANALYZE_SIZE);
 
 	return PINK_REF - (Float_t)i / STEPS_PER_DB;
 }
 
 void
-gain_pop(struct replaygain_ctx *ctx, struct replaygain_value *out)
+replaygain_pop(struct replaygain_ctx *ctx, struct replaygain_value *out)
 {
 	memcpy(out, &ctx->value, sizeof(ctx->value));
 

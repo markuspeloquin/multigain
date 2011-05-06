@@ -12,11 +12,22 @@
  * OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
  * CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. */
 
+#include <sstream>
+
 #include <mpg123.h>
 
 #include <multigain/errors.hpp>
 
-multigain::Mpg123_error::Mpg123_error(int errval) : _msg("mpg123 error: ")
+multigain::Mpg123_error::Mpg123_error(const std::string &msg, int errval)
 {
-	_msg += mpg123_plain_strerror(errval);
+	std::ostringstream out;
+	out << msg << ": mpg123 error: " << mpg123_plain_strerror(errval);
+	_msg = out.str();
+}
+
+multigain::Mpg123_error::Mpg123_error(int errval)
+{
+	std::ostringstream out;
+	out << "mpg123 error: " << mpg123_plain_strerror(errval);
+	_msg = out.str();
 }

@@ -67,10 +67,9 @@
 #include <stdexcept>
 
 #include <multigain/errors.hpp>
+#include <multigain/gain_analysis.h>
 
 namespace multigain {
-
-#include <multigain/gain_analysis.h>
 
 /** A sample of a Replaygain calculation */
 class Sample {
@@ -90,7 +89,7 @@ public:
 	{
 		double	v;
 		if (_dirty) {
-			v = gain_adjustment(&_value);
+			v = replaygain_adjustment(&_value);
 			const_cast<Sample *>(this)->_cached = v;
 			const_cast<Sample *>(this)->_dirty = false;
 		} else
@@ -135,7 +134,7 @@ public:
 	 */
 	Sample_accum &operator+=(const Sample &value)
 	{
-		gain_sample_accum(&_sum, &value._value);
+		replaygain_accum(&_sum, &value._value);
 		return *this;
 	}
 
@@ -151,7 +150,7 @@ public:
 	{
 		double	v;
 		if (_dirty) {
-			v = gain_adjustment(&_sum);
+			v = replaygain_adjustment(&_sum);
 			const_cast<Sample_accum *>(this)->_cached = v;
 			const_cast<Sample_accum *>(this)->_dirty = false;
 		} else
@@ -173,24 +172,37 @@ public:
 	 *
 	 * \param samplefreq	The input sample frequency
 	 */
-	Analyzer(long samplefreq) throw (Bad_samplefreq) :
+	Analyzer(long freq) throw (Bad_samplefreq) :
 		_ctx(0)
 	{
-		enum replaygain_init_status	status;
-		_ctx = gain_alloc_analysis(samplefreq, &status);
+		enum replaygain_status	status;
+		_ctx = replaygain_alloc(freq, &status);
 		switch (status) {
-		case REPLAYGAIN_INIT_ERR_MEM:
+		case REPLAYGAIN_ERR_MEM:
 			throw std::bad_alloc();
-		case REPLAYGAIN_INIT_ERR_SAMPLEFREQ:
+		case REPLAYGAIN_ERR_SAMPLEFREQ:
 			throw Bad_samplefreq();
-		case REPLAYGAIN_INIT_OK:
+		case REPLAYGAIN_OK:
 			break;
+		default:
+			assert(0);
 		}
 	}
 
 	~Analyzer()
 	{
-		free(_ctx);
+		replaygain_free(_ctx);
+	}
+
+	/** Reset the sampling frequency
+	 *
+	 * \param freq	    The frequency to reset to
+	 * \retval false    Bad sample frequency
+	 */
+	bool reset_sample_frequency(long freq)
+	{
+		return replaygain_reset_frequency(_ctx, freq) ==
+		    REPLAYGAIN_OK;
 	}
 
 	/** Accumulate samples into a calculation
@@ -210,7 +222,7 @@ public:
 	{
 		enum replaygain_status	status;
 
-		status = gain_analyze_samples(_ctx, left_samples,
+		status = replaygain_analyze(_ctx, left_samples,
 		    right_samples, num_samples, num_channels);
 		return status == REPLAYGAIN_OK;
 	}
@@ -221,7 +233,7 @@ public:
 	 */
 	void pop(Sample *out)
 	{
-		gain_pop(_ctx, &out->_value);
+		replaygain_pop(_ctx, &out->_value);
 	}
 
 private:
