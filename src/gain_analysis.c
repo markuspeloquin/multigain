@@ -87,8 +87,8 @@ struct replaygain_ctx {
 	Float_t		loutbuf[MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
 	/* left "out" (i.e. post second filter) samples */
 	Float_t		*lout;
-	Float_t		rinprebuf[MAX_ORDER * 2];
 
+	Float_t		rinprebuf[MAX_ORDER * 2];
 	/* right input samples ... */
 	Float_t		*rinpre;
 	Float_t		rstepbuf[MAX_SAMPLES_PER_WINDOW + MAX_ORDER];
@@ -98,8 +98,8 @@ struct replaygain_ctx {
 
 	/* number of samples required to reach number of milliseconds required
 	 * for RMS window */
-	long		sampleWindow;
-	long		totsamp;
+	unsigned long	sampleWindow;
+	unsigned long	totsamp;
 	Float_t		lsum;
 	Float_t		rsum;
 	int		freqindex;
@@ -317,6 +317,8 @@ replaygain_alloc(long freq, enum replaygain_status *out_status)
 	ctx->lout   = ctx->loutbuf   + MAX_ORDER;
 	ctx->rout   = ctx->routbuf   + MAX_ORDER;
 
+	memset(ctx->value.value, 0, sizeof(ctx->value.value));
+
 	if (out_status) *out_status = REPLAYGAIN_OK;
 	return ctx;
 }
@@ -331,9 +333,9 @@ enum replaygain_status
 replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
     const Float_t *rsamples, size_t num_samples, int channels)
 {
-	long		batchsamples;
-	size_t		copy_samples;
-	long		cursamplepos;
+	long	batchsamples;
+	size_t	copy_samples;
+	long	cursamplepos;
 
 	if (!num_samples)
 		return REPLAYGAIN_OK;
@@ -465,7 +467,7 @@ replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
 		 *
 		 * Markus: I'm not sure who wrote above note or what it
 		 * means; maybe it's an assertion */
-		if (ctx->totsamp > ctx->sampleWindow)   
+		if (ctx->totsamp > ctx->sampleWindow)
 			return REPLAYGAIN_ERROR;
 	}
 	if (num_samples < MAX_ORDER) {
