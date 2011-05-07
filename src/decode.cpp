@@ -215,8 +215,8 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 				lbuf.reset(new short[MAX_SAMPLES]);
 			if (!rbuf.get() && hdr->channels() == 2)
 				rbuf.reset(new short[MAX_SAMPLES]);
-			lsamples = lbuf.get();
-			rsamples = rbuf.get();
+			lsamples = reinterpret_cast<short *>(lbuf.get());
+			rsamples = reinterpret_cast<short *>(rbuf.get());
 		} else {
 			lsamples = sample_bufs[0];
 			rsamples = sample_bufs[1];
