@@ -189,6 +189,7 @@ main(int argc, char **argv)
 	std::cout << "min,max = " << min << ',' << max << '\n';
 
 	assert(buf_cnt == skip_back);
+	std::cout << "ignored back " << skip_back << '\n';
 
 	if (!analyzer.get()) {
 		std::cerr << "failed to read anything\n";

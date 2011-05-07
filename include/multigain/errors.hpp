@@ -46,27 +46,27 @@ struct Disk_error : std::exception {
 	std::string _msg;
 };
 
-struct Mpg123_error : std::exception {
-	Mpg123_error(const std::string &msg, int errval);
-	Mpg123_error(int errval);
+struct Lame_error : std::exception {
+	Lame_error(const std::string &msg, int errval);
+	Lame_error(int errval);
 	const char *what() const throw ()
 	{	return _msg.c_str(); }
-	virtual ~Mpg123_error() throw () {}
+	virtual ~Lame_error() throw () {}
 	std::string _msg;
 };
 
-struct Mpg123_decode_error : Mpg123_error, Decode_error {
-	Mpg123_decode_error(const std::string &msg, int errval) :
-		Mpg123_error(msg, errval),
+struct Lame_decode_error : Lame_error, Decode_error {
+	Lame_decode_error(const std::string &msg, int errval) :
+		Lame_error(msg, errval),
 		Decode_error()
 	{}
-	Mpg123_decode_error(int errval) :
-		Mpg123_error(errval),
+	Lame_decode_error(int errval) :
+		Lame_error(errval),
 		Decode_error()
 	{}
 	const char *what() const throw ()
-	{	return Mpg123_error::what(); }
-	virtual ~Mpg123_decode_error() throw () {}
+	{	return Lame_error::what(); }
+	virtual ~Lame_decode_error() throw () {}
 };
 
 struct Not_enough_samples : public std::exception {

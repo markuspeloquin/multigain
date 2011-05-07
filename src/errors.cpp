@@ -14,20 +14,49 @@
 
 #include <sstream>
 
-#include <mpg123.h>
+#include <lame/lame.h>
 
 #include <multigain/errors.hpp>
+#include "lame.hpp"
 
-multigain::Mpg123_error::Mpg123_error(const std::string &msg, int errval)
+namespace {
+
+const char *lame_strerror(int status)
+{
+	switch (status) {
+	case LAME_OKAY:			return "okay";
+	case LAME_GENERICERROR:		return "generic error";
+	case LAME_NOMEM:		return "no memory";
+	case LAME_BADBITRATE:		return "bad bitrate";
+	case LAME_BADSAMPFREQ:		return "bad sample frequency";
+	case LAME_INTERNALERROR:	return "internal error";
+
+	case FRONTEND_READERROR:	return "[frontend] read error";
+	case FRONTEND_WRITEERROR:	return "[frontend] write error";
+	case FRONTEND_FILETOOLARGE:	return "[frontend] file too large";
+
+	default:			return "unknown";
+	}
+}
+
+} // end anon
+
+multigain::Lame_error::Lame_error(const std::string &msg, int errval)
 {
 	std::ostringstream out;
-	out << msg << ": mpg123 error: " << mpg123_plain_strerror(errval);
+	out << msg << ": LAME error: " << lame_strerror(errval);
+	const std::string &last = Lame_lib::last_error();
+	if (!last.empty())
+		out << " (" << last << ')';
 	_msg = out.str();
 }
 
-multigain::Mpg123_error::Mpg123_error(int errval)
+multigain::Lame_error::Lame_error(int errval)
 {
 	std::ostringstream out;
-	out << "mpg123 error: " << mpg123_plain_strerror(errval);
+	out << "LAME error: " << lame_strerror(errval);
+	const std::string &last = Lame_lib::last_error();
+	if (!last.empty())
+		out << " (" << last << ')';
 	_msg = out.str();
 }

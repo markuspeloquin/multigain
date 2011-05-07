@@ -17,11 +17,12 @@
 #include <limits>
 #include <memory>
 
-#include <mpg123.h>
+#include <lame/lame.h>
 
 #include <multigain/decode.hpp>
 #include <multigain/gain_analysis.hpp>
 #include <multigain/tag_locate.hpp>
+#include "lame.hpp"
 
 namespace multigain {
 namespace {
@@ -49,31 +50,6 @@ int32_t MPEG_FREQ[4][4] = {
 uint8_t MPEG_INTENSITY_BAND[4] = {
 	4, 8, 12, 16
 };
-
-class Mpg123_lib {
-public:
-	static void init() throw (Mpg123_error)
-	{
-		int ret;
-		if ((ret = mpg123_init()) != MPG123_OK)
-			throw Mpg123_error(ret);
-		_instance._valid = true;
-	}
-
-private:
-	Mpg123_lib() : _valid(false) {}
-	~Mpg123_lib()
-	{
-		if (_valid) mpg123_exit();
-	}
-
-	Mpg123_lib(const Mpg123_lib &) {}
-	void operator=(const Mpg123_lib &) {}
-
-	static Mpg123_lib _instance;
-	bool _valid;
-};
-Mpg123_lib Mpg123_lib::_instance;
 
 /** Returns an index into <code>MPEG_BITRATE</code> */
 inline uint8_t
@@ -144,178 +120,119 @@ is_lame(const uint8_t *frame, size_t sz)
 } // end multigain
 
 multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file,
-    off_t media_begin, off_t media_end) throw (Disk_error, Mpg123_error) :
+    off_t media_begin, off_t media_end) throw (Disk_error, Lame_decode_error) :
 	_file(file),
 	_pos(media_begin),
 	_end(media_end)
 {
-	int		errval;
-
-	Mpg123_lib::init();
+	Lame_lib::init();
 
 	if (!_file.seekg(_pos))
 		throw Disk_error("seek error");
 
-	if (!(_hdl = mpg123_new(0, &errval)))
-		throw Mpg123_error(errval);
-	if ((errval = mpg123_open_feed(_hdl)) != MPG123_OK) {
-		mpg123_delete(_hdl);
-		throw Mpg123_error(errval);
-	}
+	if (!(_gfp = hip_decode_init()))
+		throw Lame_decode_error("initializing decoder", LAME_NOMEM);
 }
 
 multigain::Mpeg_decoder::~Mpeg_decoder()
 {
-	mpg123_delete(_hdl);
+	/*int ret =*/ hip_decode_exit(_gfp);
 }
 
-size_t
+boost::shared_ptr<multigain::Mpeg_frame_header>
 multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
     throw (Disk_error)
 {
-	char		*buf = reinterpret_cast<char *>(frame);
-	uint16_t	size;
+	boost::shared_ptr<Mpeg_frame_header> hdr;
+	char *buf = reinterpret_cast<char *>(frame);
 
 	// read/parse header
 
 	// if no bytes left (even if _end != filesize) assume nothing left
-	if (_end == _pos) return 0;
+	if (_end == _pos) return hdr;
 
 	if (!_file.read(buf, 4)) {
 		// no room for frame header
 		_end = _pos;
 		_file.seekg(_pos);
-		return 0;
+		return hdr;
 	}
 
 	try {
-		Mpeg_frame_header header(frame, true);
-		size = header.size();
+		hdr.reset(new Mpeg_frame_header(frame, true));
 	} catch (Mpeg_frame_header::Bad_header) {
 		// not a real frame header
 		_end = _pos;
 		_file.seekg(_pos);
-		return 0;
+		return hdr;
 	}
 
 	// read remainder of frame
 
-	if (!_file.read(reinterpret_cast<char *>(frame + 4), size - 4)) {
+	if (!_file.read(reinterpret_cast<char *>(frame + 4),
+	    hdr->size() - 4)) {
 		// there should have been something
 		_end = _pos;
 		_file.seekg(_pos);
 		throw Disk_error("read error");
 	}
 
-	return size;
+	return hdr;
 }
 
 std::pair<size_t, size_t>
 multigain::Mpeg_decoder::decode_frame(Frame *frame)
-    throw (Decode_error, Disk_error)
+    throw (Decode_error, Disk_error, Lame_decode_error)
 {
 	// encoded data
-	uint8_t		frame_encoded[MAX_FRAME_LEN];
+	uint8_t		mp3buf[MAX_FRAME_LEN];
+	mp3data_struct	mp3data;
+	boost::shared_ptr<Mpeg_frame_header> hdr;
+	int		samples = 0;
 
-	size_t bytes;
-	size_t sz_sample = sizeof(int16_t) * frame->channels();
-	size_t sz_buf = frame->len() * sz_sample;
-	size_t sz_consumed = 0;
-	size_t samples = 0;
-	int ret;
-	bool eof = false;
+	//size_t bytes;
+	//size_t sz_sample = sizeof(int16_t) * frame->channels();
+	//size_t sz_buf = frame->len() * sz_sample;
+	//size_t samples = 0;
+	//int ret;
 
-	do {
-		off_t	frame_num;
-		int16_t	*audio;
+	for (;;) {
+		int	enc_delay;
+		int	enc_padding;
 
-		// dereference frame->samples()
-		ret = mpg123_decode_frame(_hdl, &frame_num,
-		    reinterpret_cast<uint8_t **>(&audio), &bytes);
-		if (bytes) {
-			int16_t	**sample_bufs = frame->samples();
-			samples = bytes / sz_sample;
-			assert(samples * sz_sample == bytes);
-
-			// copy decoded data into Frame structure
-			if (frame->channels() == 1) {
-				std::copy(audio, audio + samples,
-				    sample_bufs[0]);
-			} else {
-				assert(frame->channels() == 2);
-
-				int16_t *p = audio;
-				for (size_t i = 0; i < samples; i++) {
-					sample_bufs[0][i] = *p++;
-					sample_bufs[1][i] = *p++;
-				}
-			}
-			frame->frameno(frame_num);
-			// overflow
-			assert(frame->frameno() == frame_num);
-		}
-
-		switch (ret) {
-		case MPG123_OK:
+		// read next MPEG frame
+		hdr = next_frame(mp3buf);
+		if (!hdr.get())
+			// eof
 			break;
-		case MPG123_NEW_FORMAT:
-		{
-			long rate;
-			int channels;
-			int encoding;
+			//return std::make_pair(0, 0);
 
-			if ((ret = mpg123_getformat(_hdl, &rate, &channels,
-			    &encoding)))
-				throw Mpg123_decode_error(
-				    "on mpg123_getformat", ret);
+		frame->init(MAX_SAMPLES, hdr->channels(), hdr->frequency());
+		int16_t	**sample_bufs = frame->samples();
 
-			assert(rate > 0 &&
-			    rate <= std::numeric_limits<uint16_t>::max());
-			assert(channels > 0 &&
-			    channels <= std::numeric_limits<uint8_t>::max());
+		// decode frame
+		samples = hip_decode1_headersB(_gfp, mp3buf, hdr->size(),
+		    sample_bufs[0], sample_bufs[1],
+		    &mp3data, &enc_delay, &enc_padding); 
+		if (samples < 0)
+			throw Lame_decode_error("decoding error", samples);
+		else if (!samples)
+			continue;
 
-			// reset encoding to int16_t
-			if (encoding != MPG123_ENC_SIGNED_16 &&
-			    (ret = mpg123_format(_hdl, rate, channels,
-			    MPG123_ENC_SIGNED_16)))
-				throw Mpg123_decode_error(
-				    "on mpg123_format", ret);
+		std::cout << "samples " << samples << '\n';
 
-			assert(!samples);
-			frame->init(MAX_SAMPLES * 2, channels, rate);
-			sz_sample = sizeof(int16_t) * channels;
-			sz_buf = frame->len() * sz_sample;
+		assert(frame->channels() == mp3data.stereo);
+		assert(frame->frequency() == mp3data.samplerate);
 
-			break;
-		}
-		case MPG123_NEED_MORE:
-		{
-			// read next MPEG frame
-			size_t size = next_frame(frame_encoded);
-			if (!size) {
-				eof = true;
-				break;
-			}
-			sz_consumed += size;
+		if (enc_delay < 0) enc_delay = 0;
+		if (enc_padding < 0) enc_padding = 0;
 
-			// send to decoder
-			if ((ret = mpg123_feed(_hdl, frame_encoded, size))
-			    != MPG123_OK) {
-				// undo next_frame()'s damage
-				_file.seekg(_pos -= size);
-				throw Mpg123_decode_error(ret);
-			}
-			break;
-		}
-		case MPG123_DONE:
-			// shouldn't happen with feeding
-		default:
-			throw Mpg123_decode_error("on mpg123_read", ret);
-		}
-	} while (!eof && !samples);
+		break;
+	}
 
-	std::cout << "returning (" << sz_consumed << ", " << samples << ")\n";
-	return std::make_pair(sz_consumed, samples);
+	size_t bytes = hdr.get() ? hdr->size() : 0;
+	std::cout << "returning (" << bytes << ", " << samples << ")\n";
+	return std::make_pair(bytes, samples);
 }
 
 void

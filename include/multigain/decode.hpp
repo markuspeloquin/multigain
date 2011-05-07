@@ -19,10 +19,12 @@
 #include <tr1/cstdint>
 
 #include <boost/scoped_array.hpp>
+#include <boost/shared_ptr.hpp>
 
 #include <multigain/errors.hpp>
 
-struct mpg123_handle_struct;
+// hip_global_struct* == hip_t
+struct hip_global_struct;
 
 namespace multigain {
 
@@ -128,6 +130,8 @@ public:
 	    throw (Decode_error, Disk_error) = 0;
 };
 
+class Mpeg_frame_header;
+
 /** MPEG audio frame-by-frame decoder */
 class Mpeg_decoder : public Decoder{
 public:
@@ -141,10 +145,10 @@ public:
 	 *	final frame (currently ignored, the decoding library is
 	 *	depended on to detect this)
 	 * \throw Disk_error	Problem seeking to <code>media_begin</code>
-	 * \throw Mpg123_error	The mpg123 library has some error
+	 * \throw Lame_error	The LAME library has some error
 	 */
 	Mpeg_decoder(std::ifstream &file, off_t media_begin, off_t media_end)
-	    throw (Disk_error, Mpg123_error);
+	    throw (Disk_error, Lame_decode_error);
 	~Mpeg_decoder();
 
 	/** Decode a single frame
@@ -155,11 +159,11 @@ public:
 	 *	just returned
 	 * \throw Decode_error	So far, this really should not happen
 	 * \throw Disk_error	Seek or read error
-	 * \throw Mpg123_error	The mpg123 library has some error
+	 * \throw Lame_error	The LAME library has some error
 	 * \return	Input bytes consumed, samples decoded
 	 */
 	std::pair<size_t, size_t> decode_frame(Frame *)
-	    throw (Decode_error, Disk_error);
+	    throw (Decode_error, Disk_error, Lame_decode_error);
 
 private:
 	Mpeg_decoder(const Mpeg_decoder &_) : _file(_._file)
@@ -170,12 +174,13 @@ private:
 	// 448 kbps, 8 kHz, padded
 	static const size_t MAX_FRAME_LEN = 8065;
 
-	size_t next_frame(uint8_t[MAX_FRAME_LEN]) throw (Disk_error);
+	boost::shared_ptr<Mpeg_frame_header> next_frame(
+	    uint8_t[MAX_FRAME_LEN]) throw (Disk_error);
 
 	std::ifstream			&_file;
 	off_t				_pos;
 	off_t				_end;
-	struct mpg123_handle_struct	*_hdl;
+	struct hip_global_struct	*_gfp;
 };
 
 class Mpeg_frame_header {
@@ -232,7 +237,7 @@ public:
 	uint32_t bitrate() const
 	{	return _bitrate; }
 
-	uint16_t sampling_rate() const
+	uint16_t frequency() const
 	{	return _frequency; }
 
 	bool padded() const

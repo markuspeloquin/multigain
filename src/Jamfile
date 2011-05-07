@@ -9,12 +9,12 @@ using gcc
 	<cflags>"-std=c99 -pedantic"
 	;
 
-lib mpg123 ;
+lib mp3lame ;
 
 lib multigain
 	:
-	decode.cpp errors.cpp gain_analysis.c tag_locate.cpp
-	mpg123
+	decode.cpp errors.cpp gain_analysis.c lame.cpp tag_locate.cpp
+	mp3lame
 	:
 	<include>../include
 	<define>_BSD_SOURCE
