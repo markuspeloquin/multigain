@@ -184,17 +184,16 @@ std::pair<size_t, size_t>
 multigain::Mpeg_decoder::decode_frame(Frame *frame)
     throw (Decode_error, Disk_error, Lame_decode_error)
 {
+	const bool EXTRA_COPY = sizeof(short) != sizeof(int16_t);
+
 	// encoded data
 	uint8_t		mp3buf[MAX_FRAME_LEN];
 	mp3data_struct	mp3data;
 	boost::shared_ptr<Mpeg_frame_header> hdr;
 	int		samples = 0;
 
-	//size_t bytes;
-	//size_t sz_sample = sizeof(int16_t) * frame->channels();
-	//size_t sz_buf = frame->len() * sz_sample;
-	//size_t samples = 0;
-	//int ret;
+	boost::scoped_array<short> lbuf;
+	boost::scoped_array<short> rbuf;
 
 	for (;;) {
 		int	enc_delay;
@@ -209,10 +208,23 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 
 		frame->init(MAX_SAMPLES, hdr->channels(), hdr->frequency());
 		int16_t	**sample_bufs = frame->samples();
+		short *lsamples;
+		short *rsamples;
+		if (EXTRA_COPY) {
+			if (!lbuf.get())
+				lbuf.reset(new short[MAX_SAMPLES]);
+			if (!rbuf.get() && hdr->channels() == 2)
+				rbuf.reset(new short[MAX_SAMPLES]);
+			lsamples = lbuf.get();
+			rsamples = rbuf.get();
+		} else {
+			lsamples = sample_bufs[0];
+			rsamples = sample_bufs[1];
+		}
 
 		// decode frame
 		samples = hip_decode1_headersB(_gfp, mp3buf, hdr->size(),
-		    sample_bufs[0], sample_bufs[1],
+		    lsamples, rsamples,
 		    &mp3data, &enc_delay, &enc_padding); 
 		if (samples < 0)
 			throw Lame_decode_error("decoding error", samples);
@@ -227,6 +239,15 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 		if (enc_delay < 0) enc_delay = 0;
 		if (enc_padding < 0) enc_padding = 0;
 
+		if (EXTRA_COPY) {
+			// copy back into sample_bufs
+			std::copy(lbuf.get(), lbuf.get() + samples,
+			    sample_bufs[0]);
+			if (rbuf.get())
+				std::copy(rbuf.get(), rbuf.get() + samples,
+				    sample_bufs[1]);
+		}
+
 		break;
 	}
 
@@ -234,6 +255,8 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 	std::cout << "returning (" << bytes << ", " << samples << ")\n";
 	return std::make_pair(bytes, samples);
 }
+
+#undef EXTRA_COPY
 
 void
 multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal)

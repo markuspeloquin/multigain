@@ -164,7 +164,6 @@ main(int argc, char **argv)
 				min = std::min(min_, min);
 				max = std::max(max_, max);
 
-
 				leftbuf_double[i] = sample_i2d(leftbuf[i]);
 				rightbuf_double[i] = sample_i2d(rightbuf[i]);
 			}
