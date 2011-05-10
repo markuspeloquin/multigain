@@ -53,7 +53,7 @@ main(int argc, char **argv)
 	uint16_t skip_back = 0;
 	uint32_t frames;
 
-	dump_tags(tags);
+	//dump_tags(tags);
 
 	for (std::list<tag_info>::const_iterator i = tags.begin();
 	    i != tags.end(); ++i)
@@ -120,7 +120,7 @@ main(int argc, char **argv)
 		    frame.samples()[0] : frame.samples()[1];
 
 		if (skip_front) {
-			std::cout << "cutting front " << skip_front << '\n';
+			std::cerr << "cutting front " << skip_front << '\n';
 			left += skip_front;
 			right += skip_front;
 			if (counts.second >= skip_front) {
@@ -168,11 +168,21 @@ main(int argc, char **argv)
 				rightbuf_double[i] = sample_i2d(rightbuf[i]);
 			}
 
-			std::cout << "analyzing " << usable << '\n';
+			std::cerr << "analyzing " << usable << '\n';
 			if (!analyzer->add(leftbuf_double.get(),
 			    rightbuf_double.get(), usable, 2)) {
 				std::cerr << "what\n";
 				return 1;
+			}
+
+			double *s[] = { leftbuf_double.get(),
+			    rightbuf_double.get() };
+			for (size_t i = 0; i < usable; i++) {
+				for (size_t j = 0; j < frame.channels(); j++) {
+					if (j) std::cout << '\t';
+					std::cout << static_cast<int>(s[j][i]);
+				}
+				std::cout << '\n';
 			}
 
 			// move data left (skip_back samples are moved)
@@ -185,10 +195,10 @@ main(int argc, char **argv)
 		}
 	}
 
-	std::cout << "min,max = " << min << ',' << max << '\n';
+	//std::cerr << "min,max = " << min << ',' << max << '\n';
 
 	assert(buf_cnt == skip_back);
-	std::cout << "ignored back " << skip_back << '\n';
+	std::cerr << "ignored back " << skip_back << '\n';
 
 	if (!analyzer.get()) {
 		std::cerr << "failed to read anything\n";
@@ -197,7 +207,7 @@ main(int argc, char **argv)
 
 	Sample sample;
 	analyzer->pop(&sample);
-	std::cout << "gain: " << sample.adjustment() << " dB\n";
+	std::cerr << "gain: " << sample.adjustment() << " dB\n";
 
 	return 0;
 }

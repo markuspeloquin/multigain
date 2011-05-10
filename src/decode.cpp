@@ -187,33 +187,56 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 	const bool EXTRA_COPY = sizeof(short) != sizeof(int16_t);
 
 	// encoded data
-	uint8_t		mp3buf[MAX_FRAME_LEN];
-	mp3data_struct	mp3data;
-	boost::shared_ptr<Mpeg_frame_header> hdr;
+	uint8_t					mp3buf[MAX_FRAME_LEN];
+	mp3data_struct				mp3data;
+	boost::shared_ptr<Mpeg_frame_header>	hdr;
+	boost::scoped_array<short>		lbuf;
+	boost::scoped_array<short>		rbuf;
+
+	size_t		buf_len = 0;
+	short		*lsamples = 0;
+	short		*rsamples = 0;
+	int16_t		**sample_bufs;
 	int		samples = 0;
 
-	boost::scoped_array<short> lbuf;
-	boost::scoped_array<short> rbuf;
+	sample_bufs = frame->samples();
+	if (sample_bufs) {
+		if (EXTRA_COPY) {
+			lbuf.reset(new short[MAX_SAMPLES]);
+			rbuf.reset(new short[MAX_SAMPLES]);
+			lsamples = lbuf.get();
+			rsamples = rbuf.get();
+		} else {
+			lsamples = reinterpret_cast<short *>(sample_bufs[0]);
+			rsamples = reinterpret_cast<short *>(sample_bufs[1]);
+		}
+	}
 
 	for (;;) {
-		int	enc_delay;
-		int	enc_padding;
+		// decode frame
+		samples = hip_decode1_headers(_gfp, mp3buf, buf_len,
+		    lsamples, rsamples, &mp3data); 
+		if (samples > 0)
+			break;
+		else if (samples < 0)
+			throw Lame_decode_error("decoding error", samples);
 
 		// read next MPEG frame
 		hdr = next_frame(mp3buf);
 		if (!hdr.get())
 			// eof
 			break;
-			//return std::make_pair(0, 0);
 
-		frame->init(MAX_SAMPLES, hdr->channels(), hdr->frequency());
-		int16_t	**sample_bufs = frame->samples();
-		short *lsamples;
-		short *rsamples;
+		buf_len = hdr->size();
+		frame->init(MAX_SAMPLES, hdr->channels(),
+		    hdr->frequency());
+
+		sample_bufs = frame->samples();
+		// reset lsamples, rsamples in case the buffer was reallocced
 		if (EXTRA_COPY) {
 			if (!lbuf.get())
 				lbuf.reset(new short[MAX_SAMPLES]);
-			if (!rbuf.get() && hdr->channels() == 2)
+			if (!rbuf.get() && frame->channels() == 2)
 				rbuf.reset(new short[MAX_SAMPLES]);
 			lsamples = lbuf.get();
 			rsamples = rbuf.get();
@@ -221,38 +244,24 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 			lsamples = reinterpret_cast<short *>(sample_bufs[0]);
 			rsamples = reinterpret_cast<short *>(sample_bufs[1]);
 		}
+	}
 
-		// decode frame
-		samples = hip_decode1_headersB(_gfp, mp3buf, hdr->size(),
-		    lsamples, rsamples,
-		    &mp3data, &enc_delay, &enc_padding); 
-		if (samples < 0)
-			throw Lame_decode_error("decoding error", samples);
-		else if (!samples)
-			continue;
-
-		std::cout << "samples " << samples << '\n';
-
+	if (samples) {
 		assert(frame->channels() == mp3data.stereo);
 		assert(frame->frequency() == mp3data.samplerate);
+	}
 
-		if (enc_delay < 0) enc_delay = 0;
-		if (enc_padding < 0) enc_padding = 0;
-
-		if (EXTRA_COPY) {
-			// copy back into sample_bufs
-			std::copy(lbuf.get(), lbuf.get() + samples,
-			    sample_bufs[0]);
-			if (rbuf.get())
-				std::copy(rbuf.get(), rbuf.get() + samples,
-				    sample_bufs[1]);
-		}
-
-		break;
+	if (EXTRA_COPY) {
+		// copy back into sample_bufs
+		std::copy(lbuf.get(), lbuf.get() + samples,
+		    sample_bufs[0]);
+		if (rbuf.get())
+			std::copy(rbuf.get(), rbuf.get() + samples,
+			    sample_bufs[1]);
 	}
 
 	size_t bytes = hdr.get() ? hdr->size() : 0;
-	std::cout << "returning (" << bytes << ", " << samples << ")\n";
+	//std::cout << "returning (" << bytes << ", " << samples << ")\n";
 	return std::make_pair(bytes, samples);
 }
 

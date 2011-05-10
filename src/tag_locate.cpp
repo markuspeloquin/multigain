@@ -101,7 +101,7 @@ find_skip_amounts(const uint8_t *info, tag_info *tag_info)
 	tag_info->extra.info.skip_front =
 	    (static_cast<uint16_t>(skip[0]) << 4) | (skip[1] >> 4);
 	tag_info->extra.info.skip_back =
-	    ((static_cast<uint16_t>(skip[1]) & 0xf) << 8) | skip[2];
+	    (static_cast<uint16_t>(skip[1] & 0xf) << 8) | skip[2];
 }
 
 void
