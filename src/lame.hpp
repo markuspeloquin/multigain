@@ -12,6 +12,7 @@ namespace multigain {
 
 class Lame_lib {
 public:
+	// return type is lame_global_flags*
 	static struct lame_global_struct *init() throw (Lame_error)
 	{
 		if (!_instance._flags)

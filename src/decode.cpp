@@ -261,7 +261,6 @@ multigain::Mpeg_decoder::decode_frame(Frame *frame)
 	}
 
 	size_t bytes = hdr.get() ? hdr->size() : 0;
-	//std::cout << "returning (" << bytes << ", " << samples << ")\n";
 	return std::make_pair(bytes, samples);
 }
 

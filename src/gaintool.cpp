@@ -17,9 +17,12 @@
 #include <limits>
 #include <memory>
 
+#include <lame/lame.h>
+
 #include <multigain/decode.hpp>
 #include <multigain/gain_analysis.hpp>
 #include <multigain/tag_locate.hpp>
+#include "lame.hpp"
 
 namespace {
 
@@ -43,17 +46,23 @@ main(int argc, char **argv)
 	assert(argc > 1);
 
 	std::string path = argv[1];
-	std::ifstream file(path.c_str(), std::ios::in | std::ios::binary);
-	std::list<tag_info> tags;
-	find_tags(file, tags);
+	std::ifstream file;
 
 	off_t pos_begin = -1;
 	off_t pos_end = -1;
-	uint16_t skip_front = 0;
+	uint16_t skip_front = -1;
 	uint16_t skip_back = 0;
 	uint32_t frames;
 
-	//dump_tags(tags);
+	file.open(path.c_str(), std::ios::in | std::ios::binary);
+	if (!file) {
+		std::cerr << *argv << ": failed to open file\n";
+		return 1;
+	}
+
+	std::list<tag_info> tags;
+	find_tags(file, tags);
+	dump_tags(tags);
 
 	for (std::list<tag_info>::const_iterator i = tags.begin();
 	    i != tags.end(); ++i)
@@ -71,6 +80,15 @@ main(int argc, char **argv)
 		default:
 			;
 		}
+
+	if (skip_front == -1) {
+		lame_global_flags *lame = Lame_lib::init();
+		skip_front = lame_get_encoder_delay(lame) + 528 + 1;
+	} else {
+		skip_front += 528 + 1;
+		skip_back -= 528 + 1;
+		if (skip_back < 0) skip_back = 0;
+	}
 
 	if (pos_begin == -1) {
 		std::cerr << "no media found\n";
@@ -120,7 +138,6 @@ main(int argc, char **argv)
 		    frame.samples()[0] : frame.samples()[1];
 
 		if (skip_front) {
-			std::cerr << "cutting front " << skip_front << '\n';
 			left += skip_front;
 			right += skip_front;
 			if (counts.second >= skip_front) {
@@ -168,21 +185,10 @@ main(int argc, char **argv)
 				rightbuf_double[i] = sample_i2d(rightbuf[i]);
 			}
 
-			std::cerr << "analyzing " << usable << '\n';
 			if (!analyzer->add(leftbuf_double.get(),
 			    rightbuf_double.get(), usable, 2)) {
 				std::cerr << "what\n";
 				return 1;
-			}
-
-			double *s[] = { leftbuf_double.get(),
-			    rightbuf_double.get() };
-			for (size_t i = 0; i < usable; i++) {
-				for (size_t j = 0; j < frame.channels(); j++) {
-					if (j) std::cout << '\t';
-					std::cout << static_cast<int>(s[j][i]);
-				}
-				std::cout << '\n';
 			}
 
 			// move data left (skip_back samples are moved)
@@ -195,10 +201,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	//std::cerr << "min,max = " << min << ',' << max << '\n';
-
 	assert(buf_cnt == skip_back);
-	std::cerr << "ignored back " << skip_back << '\n';
 
 	if (!analyzer.get()) {
 		std::cerr << "failed to read anything\n";
@@ -207,7 +210,7 @@ main(int argc, char **argv)
 
 	Sample sample;
 	analyzer->pop(&sample);
-	std::cerr << "gain: " << sample.adjustment() << " dB\n";
+	std::cout << "gain: " << sample.adjustment() << " dB\n";
 
 	return 0;
 }
