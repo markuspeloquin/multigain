@@ -51,6 +51,14 @@ uint8_t MPEG_INTENSITY_BAND[4] = {
 	4, 8, 12, 16
 };
 
+
+bool		is_lame(const uint8_t *, size_t);
+inline uint8_t	mpeg_bitrate_tab(enum Mpeg_frame_header::version_type,
+		    enum Mpeg_frame_header::layer_type);
+void		sample_translate(const int16_t *, size_t, uint8_t,
+		    double *out);
+
+
 /** Returns an index into <code>MPEG_BITRATE</code> */
 inline uint8_t
 mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
@@ -119,19 +127,59 @@ is_lame(const uint8_t *frame, size_t sz)
 } // end anon
 } // end multigain
 
-multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file,
-    off_t media_begin, off_t media_end) throw (Disk_error, Lame_decode_error) :
+multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file)
+    throw (Decode_error, Disk_error, Lame_error) :
 	_file(file),
-	_pos(media_begin),
-	_end(media_end)
+	_end(-1),
+	_pos(-1),
+	_capacity(0),
+	_samples(0),
+	_skip_back(0),
+	_skip_front(-1)
 {
-	Lame_lib::init();
+	lame_global_flags *lame = Lame_lib::init();
+
+	if (!(_gfp = hip_decode_init()))
+		throw Lame_error("initializing decoder", LAME_NOMEM);
+
+	std::list<tag_info> tags;
+	find_tags(file, tags);
+	//dump_tags(tags);
+
+	for (std::list<tag_info>::const_iterator i = tags.begin();
+	    i != tags.end(); ++i)
+		switch (i->type) {
+		case TAG_MPEG:
+			_pos = i->start;
+			_end = _pos + i->size;
+			// also i->extra.count;
+			break;
+		case TAG_MP3_INFO:
+		case TAG_MP3_XING:
+			_skip_front = i->extra.info.skip_front;
+			_skip_back = i->extra.info.skip_back;
+			break;
+		default:
+			;
+		}
+
+	if (_pos < 0)
+		throw Bad_format("not an MPEG audio file");
+
+	if (_skip_front == -1)
+		_skip_front = lame_get_encoder_delay(lame) + 528 + 1;
+		// leave _skip_back at 0
+	else {
+		_skip_front += 528 + 1;
+		_skip_back -= 528 + 1;
+		if (_skip_back < 0) _skip_back = 0;
+	}
+
+	_capacity = MAX_SAMPLES + _skip_back;
+	_sample_buf.reset(new short[_capacity * 2]);
 
 	if (!_file.seekg(_pos))
 		throw Disk_error("seek error");
-
-	if (!(_gfp = hip_decode_init()))
-		throw Lame_decode_error("initializing decoder", LAME_NOMEM);
 }
 
 multigain::Mpeg_decoder::~Mpeg_decoder()
@@ -181,90 +229,103 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
 }
 
 std::pair<size_t, size_t>
-multigain::Mpeg_decoder::decode_frame(Frame *frame)
+multigain::Mpeg_decoder::decode(Audio_buffer *buf)
     throw (Decode_error, Disk_error, Lame_decode_error)
 {
-	const bool EXTRA_COPY = sizeof(short) != sizeof(int16_t);
-
 	// encoded data
 	uint8_t					mp3buf[MAX_FRAME_LEN];
 	mp3data_struct				mp3data;
 	boost::shared_ptr<Mpeg_frame_header>	hdr;
-	boost::scoped_array<short>		lbuf;
-	boost::scoped_array<short>		rbuf;
-
 	size_t		buf_len = 0;
-	short		*lsamples = 0;
-	short		*rsamples = 0;
-	int16_t		**sample_bufs;
-	int		samples = 0;
-
-	sample_bufs = frame->samples();
-	if (sample_bufs) {
-		if (EXTRA_COPY) {
-			lbuf.reset(new short[MAX_SAMPLES]);
-			rbuf.reset(new short[MAX_SAMPLES]);
-			lsamples = lbuf.get();
-			rsamples = rbuf.get();
-		} else {
-			lsamples = reinterpret_cast<short *>(sample_bufs[0]);
-			rsamples = reinterpret_cast<short *>(sample_bufs[1]);
-		}
-	}
+	size_t		bytes_read = 0;
+	int16_t		**sample_bufs = buf->samples();
+	int16_t		*lout = sample_bufs ? sample_bufs[0] : 0;
+	int16_t		*rout = sample_bufs ? sample_bufs[1] : 0;
+	short		*lsamples = _sample_buf.get();
+	short		*rsamples = _sample_buf.get() + _capacity;
+	size_t		tot_samples = 0;
+	uint8_t		channels = buf->channels();
 
 	for (;;) {
 		// decode frame
-		samples = hip_decode1_headers(_gfp, mp3buf, buf_len,
-		    lsamples, rsamples, &mp3data); 
-		if (samples > 0)
-			break;
-		else if (samples < 0)
+		int samples = hip_decode1_headers(_gfp, mp3buf, buf_len,
+		    lsamples + _samples, rsamples + _samples, &mp3data); 
+		if (samples > 0) {
+			_samples += samples;
+			if (_skip_front) {
+				// move data to account for delay
+				if (_skip_front < _samples) {
+					std::copy(lsamples + _skip_front,
+					    lsamples + _samples,
+					    lsamples);
+					std::copy(rsamples + _skip_front,
+					    rsamples + _samples,
+					    rsamples);
+					_samples -= _skip_front;
+					_skip_front = 0;
+				} else {
+					_skip_front -= _samples;
+					_samples = 0;
+				}
+			}
+
+			// changing # channels will reinit something in
+			// 'buf'; only do so if 'buf' is empty
+
+			if (channels != mp3data.stereo) {
+				if (tot_samples)
+					// # channels changed
+					break;
+
+				channels = mp3data.stereo;
+				buf->init(channels, mp3data.samplerate);
+				sample_bufs = buf->samples();
+				lout = sample_bufs[0];
+				rout = sample_bufs[1];
+			}
+
+			if (_samples > _skip_back) {
+				// copy data from decoder buffers to output
+				size_t amt = std::min(_samples - _skip_back,
+				    buf->len() - tot_samples);
+				std::copy(lsamples, lsamples + amt,
+				    lout + tot_samples);
+				std::copy(lsamples + amt, lsamples + _samples,
+				    lsamples);
+				if (channels > 1) {
+					std::copy(rsamples, rsamples + amt,
+					    rout + tot_samples);
+					std::copy(rsamples + amt,
+					    rsamples + _samples, rsamples);
+				}
+				tot_samples += amt;
+				_samples -= amt;
+
+				if (tot_samples == buf->len())
+					// output buffers full
+					break;
+			}
+		} else if (samples < 0)
 			throw Lame_decode_error("decoding error", samples);
 
 		// read next MPEG frame
-		hdr = next_frame(mp3buf);
-		if (!hdr.get())
-			// eof
-			break;
+		if (!samples) {
+			hdr = next_frame(mp3buf);
+			if (!hdr.get())
+				// eof
+				break;
 
-		buf_len = hdr->size();
-		frame->init(MAX_SAMPLES, hdr->channels(),
-		    hdr->frequency());
-
-		sample_bufs = frame->samples();
-		// reset lsamples, rsamples in case the buffer was reallocced
-		if (EXTRA_COPY) {
-			if (!lbuf.get())
-				lbuf.reset(new short[MAX_SAMPLES]);
-			if (!rbuf.get() && frame->channels() == 2)
-				rbuf.reset(new short[MAX_SAMPLES]);
-			lsamples = lbuf.get();
-			rsamples = rbuf.get();
-		} else {
-			lsamples = reinterpret_cast<short *>(sample_bufs[0]);
-			rsamples = reinterpret_cast<short *>(sample_bufs[1]);
-		}
+			buf_len = hdr->size();
+			bytes_read += buf_len;
+		} else
+			buf_len = 0;
 	}
 
-	if (samples) {
-		assert(frame->channels() == mp3data.stereo);
-		assert(frame->frequency() == mp3data.samplerate);
-	}
+	if (!tot_samples)
+		assert(_samples == _skip_back);
 
-	if (EXTRA_COPY) {
-		// copy back into sample_bufs
-		std::copy(lbuf.get(), lbuf.get() + samples,
-		    sample_bufs[0]);
-		if (rbuf.get())
-			std::copy(rbuf.get(), rbuf.get() + samples,
-			    sample_bufs[1]);
-	}
-
-	size_t bytes = hdr.get() ? hdr->size() : 0;
-	return std::make_pair(bytes, samples);
+	return std::make_pair(bytes_read, tot_samples);
 }
-
-#undef EXTRA_COPY
 
 void
 multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal)

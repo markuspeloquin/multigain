@@ -20,7 +20,16 @@
 
 namespace multigain {
 
-struct Bad_samplefreq : public std::exception {
+struct Bad_format : std::exception {
+	Bad_format(const std::string &msg) : _msg(msg) {}
+	Bad_format() : _msg("bad format") {}
+	virtual ~Bad_format() throw () {}
+	const char *what() const throw ()
+	{	return _msg.c_str(); }
+	std::string _msg;
+};
+
+struct Bad_samplefreq : std::exception {
 	const char *what() const throw ()
 	{	return "Bad sample frequency"; }
 	virtual ~Bad_samplefreq() throw () {}
