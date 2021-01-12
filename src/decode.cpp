@@ -194,10 +194,10 @@ multigain::Mpeg_decoder::~Mpeg_decoder() noexcept
 	/*int ret =*/ hip_decode_exit(_gfp);
 }
 
-boost::shared_ptr<multigain::Mpeg_frame_header>
+std::shared_ptr<multigain::Mpeg_frame_header>
 multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
 {
-	boost::shared_ptr<Mpeg_frame_header> hdr;
+	std::shared_ptr<Mpeg_frame_header> hdr;
 	char *buf = reinterpret_cast<char *>(frame);
 
 	// read/parse header
@@ -240,7 +240,7 @@ multigain::Mpeg_decoder::decode(Audio_buffer *buf)
 	// encoded data
 	uint8_t					mp3buf[MAX_FRAME_LEN];
 	mp3data_struct				mp3data;
-	boost::shared_ptr<Mpeg_frame_header>	hdr;
+	std::shared_ptr<Mpeg_frame_header>	hdr;
 	size_t		buf_len = 0;
 	size_t		bytes_read = 0;
 	int16_t		**sample_bufs = buf->samples();

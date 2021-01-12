@@ -1,8 +1,8 @@
 #include <cassert>
 #include <cstdint>
 #include <iostream>
+#include <memory>
 
-#include <boost/scoped_array.hpp>
 #include <sox.h>
 
 int
@@ -28,7 +28,7 @@ main(int argc, char **argv)
 	unsigned channels = fmt->signal.channels;
 	unsigned rate = fmt->signal.rate;
 	size_t num_samples = channels * rate / 75;
-	boost::scoped_array<int32_t> sample_buf(new int32_t[num_samples]);
+	std::unique_ptr<int32_t> sample_buf(new int32_t[num_samples]);
 
 	size_t samples;
 	unsigned clips = 0;
@@ -38,7 +38,7 @@ main(int argc, char **argv)
 			SOX_SAMPLE_LOCALS;
 
 			std::cout << SOX_SAMPLE_TO_SIGNED_16BIT(
-			    sample_buf[i], clips);
+			    sample_buf.get()[i], clips);
 			if (++chan == channels) {
 				std::cout << '\n';
 				chan = 0;

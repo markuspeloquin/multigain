@@ -17,9 +17,7 @@
 
 #include <cstdint>
 #include <fstream>
-
-#include <boost/scoped_array.hpp>
-#include <boost/shared_ptr.hpp>
+#include <memory>
 
 #include <multigain/errors.hpp>
 
@@ -38,28 +36,28 @@ public:
 		_chan(0)
 	{}
 
-	void init(uint8_t channels, int16_t freq)
-	{
+	void init(uint8_t channels, int16_t freq) {
+		using std::swap;
+
 		assert(channels && freq);
 
 		if (channels == _chan) return;
 
 		size_t total = _len * channels;
 
-		boost::scoped_array<int16_t> new_samples(
-		    new int16_t[total]);
+		std::unique_ptr<int16_t> new_samples(new int16_t[total]);
 
-		boost::scoped_array<int16_t *> new_sample_ptrs(
+		std::unique_ptr<int16_t *> new_sample_ptrs(
 		    new int16_t *[channels]);
 
 		size_t off = 0;
 		for (size_t i = 0; i < channels; i++) {
-			new_sample_ptrs[i] = new_samples.get() + off;
+			new_sample_ptrs.get()[i] = new_samples.get() + off;
 			off += _len;
 		}
 
-		boost::swap(_sample_ptrs, new_sample_ptrs);
-		boost::swap(_samples, new_samples);
+		std::swap(_sample_ptrs, new_sample_ptrs);
+		std::swap(_samples, new_samples);
 		_chan = channels;
 		_freq = freq;
 	}
@@ -85,8 +83,8 @@ public:
 		return _chan;
 	}
 
-	boost::scoped_array<int16_t>	_samples;
-	boost::scoped_array<int16_t *>	_sample_ptrs;
+	std::unique_ptr<int16_t>	_samples;
+	std::unique_ptr<int16_t *>	_sample_ptrs;
 	size_t		_len;
 	uint16_t 	_freq;
 	uint8_t 	_chan;
@@ -155,11 +153,11 @@ private:
 	static const size_t MAX_FRAME_LEN = 8065;
 
 	/// \throw Disk_error
-	boost::shared_ptr<Mpeg_frame_header> next_frame(
+	std::shared_ptr<Mpeg_frame_header> next_frame(
 	    uint8_t[MAX_FRAME_LEN]);
 
 	std::ifstream			&_file;
-	boost::scoped_array<short>	_sample_buf;
+	std::unique_ptr<int16_t>	_sample_buf;
 	off_t				_end;
 	off_t				_pos;
 	struct hip_global_struct	*_gfp;

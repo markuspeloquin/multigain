@@ -61,7 +61,7 @@ main(int argc, char **argv)
 	std::pair<size_t, size_t>	counts;
 	uint16_t		frequency;
 
-	boost::scoped_array<double> dbuf(new double[2 * SAMPLES]);
+	std::unique_ptr<double> dbuf(new double[2 * SAMPLES]);
 	double *ldbuf = dbuf.get();
 	double *rdbuf = dbuf.get() + SAMPLES;
 

@@ -17,8 +17,7 @@
 #include <cassert>
 #include <algorithm>
 #include <iostream>
-
-#include <boost/scoped_array.hpp>
+#include <memory>
 
 #include <multigain/tag_locate.hpp>
 #include <multigain/decode.hpp>
@@ -307,7 +306,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 
 	std::list<tag_info>::iterator	iter_media;
 
-	boost::scoped_array<uint8_t> mpeg_frame;
+	std::unique_ptr<uint8_t> mpeg_frame;
 	size_t sz_frame = 0;
 
 	// prefix tags
