@@ -10,6 +10,7 @@ libmultigain_la_SOURCES = \
 	decode.cpp \
 	errors.cpp \
 	gain_analysis.c \
+	lame.cpp \
 	tag_locate.cpp
 #AM_CFLAGS = -fpic -std=c99 -pedantic -Wall
 AM_CFLAGS = -std=c99 -pedantic -Wall -Wextra

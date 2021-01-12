@@ -42,7 +42,10 @@ main(int argc, char **argv) {
 
 	const size_t SAMPLES = 4096;
 
-	assert(argc > 1);
+	if (argc != 2) {
+		std::cerr << "Usage: " << *argv << " FILE\n";
+		return 1;
+	}
 
 	std::string path = argv[1];
 	std::ifstream file;

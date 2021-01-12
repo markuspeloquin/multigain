@@ -36,7 +36,7 @@ multigain::Lame_lib::~Lame_lib() noexcept {
 }
 
 void
-multigain::Lame_lib::destroy() throw (Lame_error) {
+multigain::Lame_lib::destroy() {
 	int ret;
 	if (_instance._flags) {
 		ret = lame_close(_instance._flags);
@@ -47,7 +47,7 @@ multigain::Lame_lib::destroy() throw (Lame_error) {
 }
 
 void
-multigain::Lame_lib::do_init() throw (Lame_error) {
+multigain::Lame_lib::do_init() {
 	int ret;
 
 	if (!(_flags = lame_init()))
