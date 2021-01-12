@@ -178,8 +178,10 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file) :
 		// leave _skip_back at 0
 	else {
 		_skip_front += 528 + 1;
-		_skip_back -= 528 + 1;
-		if (_skip_back < 0) _skip_back = 0;
+		if (_skip_back < 528 + 1)
+			_skip_back = 0;
+		else
+			_skip_back -= 528 + 1;
 	}
 
 	_capacity = MAX_SAMPLES + _skip_back;
@@ -214,7 +216,7 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
 
 	try {
 		hdr.reset(new Mpeg_frame_header(frame, true));
-	} catch (Mpeg_frame_header::Bad_header) {
+	} catch (const Mpeg_frame_header::Bad_header &e) {
 		// not a real frame header
 		_end = _pos;
 		_file.seekg(_pos);

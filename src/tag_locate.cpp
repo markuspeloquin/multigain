@@ -328,7 +328,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 			try {
 				Mpeg_frame_header frame_header(buf, true);
 				size = frame_header.size();
-			} catch (Mpeg_frame_header::Bad_header) {
+			} catch (const Mpeg_frame_header::Bad_header &e) {
 				throw Unsupported_tag("bad MPEG frame");
 			}
 
