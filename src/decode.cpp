@@ -66,8 +66,7 @@ void		sample_translate(const int16_t *, size_t, uint8_t,
 /** Returns an index into <code>MPEG_BITRATE</code> */
 inline uint8_t
 mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
-    enum Mpeg_frame_header::layer_type layer)
-{
+    enum Mpeg_frame_header::layer_type layer) {
 	switch (version) {
 	case Mpeg_frame_header::VERS_1:
 		switch (layer) {
@@ -92,8 +91,7 @@ mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
 #if 0
 void
 sample_translate(const int16_t *samples, size_t count, uint8_t step,
-    double *out)
-{
+    double *out) {
 	for (size_t i = 0; i < count; i += step) {
 		int16_t sample = samples[i];
 		if (sample < 0)
@@ -109,8 +107,7 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 // these are usually LAME tags, which should be skipped over for replaygain
 // analysis
 bool
-is_lame(const uint8_t *frame, size_t sz)
-{
+is_lame(const uint8_t *frame, size_t sz) {
 	// http://gabriel.mp3-tech.org/mp3infotag.html
 
 	//const size_t INFO_OFFSET = 0x24;
@@ -142,8 +139,7 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file) :
 	_capacity(0),
 	_samples(0),
 	_skip_back(0),
-	_skip_front(-1)
-{
+	_skip_front(-1) {
 	lame_global_flags *lame = Lame_lib::init();
 
 	if (!(_gfp = hip_decode_init()))
@@ -191,14 +187,12 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file) :
 		throw Disk_error("seek error");
 }
 
-multigain::Mpeg_decoder::~Mpeg_decoder() noexcept
-{
+multigain::Mpeg_decoder::~Mpeg_decoder() noexcept {
 	/*int ret =*/ hip_decode_exit(_gfp);
 }
 
 std::shared_ptr<multigain::Mpeg_frame_header>
-multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
-{
+multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN]) {
 	std::shared_ptr<Mpeg_frame_header> hdr;
 	char *buf = reinterpret_cast<char *>(frame);
 
@@ -237,8 +231,7 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
 }
 
 std::pair<size_t, size_t>
-multigain::Mpeg_decoder::decode(Audio_buffer *buf)
-{
+multigain::Mpeg_decoder::decode(Audio_buffer *buf) {
 	// encoded data
 	uint8_t					mp3buf[MAX_FRAME_LEN];
 	mp3data_struct				mp3data;

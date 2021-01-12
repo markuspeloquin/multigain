@@ -14,8 +14,7 @@ class Lame_lib {
 public:
 	// return type is lame_global_flags*
 	/// \throw Lame_error
-	static struct lame_global_struct *init()
-	{
+	static struct lame_global_struct *init() {
 		if (!_instance._flags)
 			_instance.do_init();
 		return _instance._flags;
@@ -25,12 +24,10 @@ public:
 	/// \throw Lame_error
 	static void destroy();
 
-	static void last_error(const char *str)
-	{
+	static void last_error(const char *str) {
 		_instance._last_error = str;
 	}
-	static const std::string &last_error()
-	{
+	static const std::string &last_error() {
 		return _instance._last_error;
 	}
 

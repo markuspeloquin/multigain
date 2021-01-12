@@ -21,8 +21,7 @@
 
 namespace {
 
-const char *lame_strerror(int status)
-{
+const char *lame_strerror(int status) {
 	switch (status) {
 	case LAME_OKAY:			return "okay";
 	case LAME_GENERICERROR:		return "generic error";
@@ -41,8 +40,7 @@ const char *lame_strerror(int status)
 
 } // end anon
 
-multigain::Lame_error::Lame_error(const std::string &msg, int errval)
-{
+multigain::Lame_error::Lame_error(const std::string &msg, int errval) {
 	std::ostringstream out;
 	out << msg << ": LAME error: " << lame_strerror(errval);
 	const std::string &last = Lame_lib::last_error();
@@ -51,8 +49,7 @@ multigain::Lame_error::Lame_error(const std::string &msg, int errval)
 	_msg = out.str();
 }
 
-multigain::Lame_error::Lame_error(int errval)
-{
+multigain::Lame_error::Lame_error(int errval) {
 	std::ostringstream out;
 	out << "LAME error: " << lame_strerror(errval);
 	const std::string &last = Lame_lib::last_error();

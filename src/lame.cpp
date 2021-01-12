@@ -8,8 +8,7 @@
 namespace {
 
 extern "C" void
-lame_errorf(const char *fmt, va_list ap)
-{
+lame_errorf(const char *fmt, va_list ap) {
 	int len;
 	if ((len = vsnprintf(0, 0, fmt, ap)) == -1) {
 		std::cerr << "vasprintf() failed\n";
@@ -28,8 +27,7 @@ lame_errorf(const char *fmt, va_list ap)
 
 }
 
-multigain::Lame_lib::~Lame_lib() noexcept
-{
+multigain::Lame_lib::~Lame_lib() noexcept {
 	try {
 		destroy();
 	} catch (const Lame_error &e) {
@@ -38,8 +36,7 @@ multigain::Lame_lib::~Lame_lib() noexcept
 }
 
 void
-multigain::Lame_lib::destroy() throw (Lame_error)
-{
+multigain::Lame_lib::destroy() throw (Lame_error) {
 	int ret;
 	if (_instance._flags) {
 		ret = lame_close(_instance._flags);
@@ -50,8 +47,7 @@ multigain::Lame_lib::destroy() throw (Lame_error)
 }
 
 void
-multigain::Lame_lib::do_init() throw (Lame_error)
-{
+multigain::Lame_lib::do_init() throw (Lame_error) {
 	int ret;
 
 	if (!(_flags = lame_init()))

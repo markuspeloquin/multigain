@@ -186,15 +186,13 @@ double		replaygain_adjustment(const struct replaygain_value *value);
 
 
 __INLINE void
-replaygain_free(struct replaygain_ctx *ctx)
-{
+replaygain_free(struct replaygain_ctx *ctx) {
 	free(ctx);
 }
 
 __INLINE void
 replaygain_accum(struct replaygain_value *sum,
-    const struct replaygain_value *addition)
-{
+    const struct replaygain_value *addition) {
 	for (size_t i = 0; i < ANALYZE_SIZE; i++)
 		sum->value[i] += addition->value[i];
 }

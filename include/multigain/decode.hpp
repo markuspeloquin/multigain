@@ -62,24 +62,23 @@ public:
 		_freq = freq;
 	}
 
-	int16_t **samples()
-	{
+	int16_t **samples() {
 		return _sample_ptrs.get();
 	}
-	const int16_t *const *samples() const
-	{
+
+	const int16_t *const *samples() const {
 		return _sample_ptrs.get();
 	}
-	size_t len() const
-	{
+
+	size_t len() const {
 		return _len;
 	}
-	uint16_t frequency() const
-	{
+
+	uint16_t frequency() const {
 		return _freq;
 	}
-	uint8_t channels() const
-	{
+
+	uint8_t channels() const {
 		return _chan;
 	}
 
@@ -110,7 +109,7 @@ public:
 	/// \throw Decode_error
 	/// \throw Disk_error
 	/// \throw Lame_decode_error
-	std::pair<size_t, size_t> decode(Audio_buffer *);
+	std::pair<size_t, size_t> decode(Audio_buffer *) override;
 };
 
 class Mpeg_frame_header;
@@ -130,6 +129,9 @@ public:
 	Mpeg_decoder(std::ifstream &file);
 	~Mpeg_decoder() noexcept;
 
+	Mpeg_decoder(const Mpeg_decoder &) = delete;
+	void operator=(const Mgeg_decoder &) = delete;
+
 	/** Decode samples
 	 *
 	 * \param[out] left	Samples of the stereo-left or mono channel
@@ -141,14 +143,9 @@ public:
 	 * \throw Lame_error	The LAME library has some error
 	 * \return	Input bytes consumed, samples decoded
 	 */
-	std::pair<size_t, size_t> decode(Audio_buffer *);
+	std::pair<size_t, size_t> decode(Audio_buffer *) override;
 
 private:
-	Mpeg_decoder(const Mpeg_decoder &_) : _file(_._file)
-	{ throw std::exception(); }
-	void operator=(const Mpeg_decoder &)
-	{ throw std::exception(); }
-
 	// 448 kbps, 8 kHz, padded
 	static const size_t MAX_FRAME_LEN = 8065;
 
@@ -170,8 +167,7 @@ private:
 
 class Mpeg_frame_header {
 public:
-	struct Bad_header : std::exception {
-	};
+	struct Bad_header : std::exception {};
 
 	enum version_type {
 		VERS_2_5 = 0,
@@ -210,35 +206,43 @@ public:
 	/// \throw Bad_header
 	void init(const uint8_t[4], bool minimal=false);
 
-	enum version_type version() const
-	{	return _version; }
+	enum version_type version() const {
+		return _version;
+	}
 
-	enum layer_type layer() const
-	{	return _layer; }
+	enum layer_type layer() const {
+		return _layer;
+	}
 
-	bool has_crc() const
-	{	return _has_crc; }
+	bool has_crc() const {
+		return _has_crc;
+	}
 
-	uint32_t bitrate() const
-	{	return _bitrate; }
+	uint32_t bitrate() const {
+		return _bitrate;
+	}
 
-	uint16_t frequency() const
-	{	return _frequency; }
+	uint16_t frequency() const {
+		return _frequency;
+	}
 
-	bool padded() const
-	{	return _padded; }
+	bool padded() const {
+		return _padded;
+	}
 
-	bool priv() const
-	{	return _priv; }
+	bool priv() const {
+		return _priv;
+	}
 
-	enum channel_mode_type channel_mode() const
-	{	return _chan_mode; }
+	enum channel_mode_type channel_mode() const {
+		return _chan_mode;
+	}
 
-	unsigned channels() const
-	{	return _chan_mode == CHAN_MONO ? 1 : 2; }
+	unsigned channels() const {
+		return _chan_mode == CHAN_MONO ? 1 : 2;
+	}
 
-	std::pair<uint8_t, uint8_t> intensity_bands() const
-	{
+	std::pair<uint8_t, uint8_t> intensity_bands() const {
 		if (_layer != LAYER_3 && _chan_mode == CHAN_JOINT_STEREO)
 			return std::pair<uint8_t, uint8_t>(
 			    _intensity_band, 31);
@@ -246,23 +250,29 @@ public:
 			return std::make_pair<uint8_t, uint8_t>(0, 0);
 	}
 
-	bool intensity_stereo() const
-	{	return _intensity_stereo; }
+	bool intensity_stereo() const {
+		return _intensity_stereo;
+	}
 
-	bool ms_stereo() const
-	{	return _ms_stereo; }
+	bool ms_stereo() const {
+		return _ms_stereo;
+	}
 
-	bool copyright() const
-	{	return _copyright; }
+	bool copyright() const {
+		return _copyright;
+	}
 
-	bool original() const
-	{	return _original; }
+	bool original() const {
+		return _original;
+	}
 
-	enum emphasis_type emphasis() const
-	{	return _emphasis; }
+	enum emphasis_type emphasis() const {
+		return _emphasis;
+	}
 
-	uint16_t size() const
-	{	return _size; }
+	uint16_t size() const {
+		return _size;
+	}
 
 private:
 	uint32_t		_bitrate;

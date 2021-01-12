@@ -6,8 +6,7 @@
 #include <sox.h>
 
 int
-main(int argc, char **argv)
-{
+main(int argc, char **argv) {
 	if (argc < 2) {
 		std::cerr << "Usage: " << *argv << " FILE\n";
 		return 1;

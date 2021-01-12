@@ -97,8 +97,7 @@ inline uint32_t buf_unsafe32(const uint8_t buf[4]) {
 #endif
 
 inline void
-find_skip_amounts(const uint8_t *info, tag_info *tag_info)
-{
+find_skip_amounts(const uint8_t *info, tag_info *tag_info) {
 	// LAME tag at 0x78
 	const uint8_t *skip = info + 0x78 + 0x15;
 	tag_info->extra.info.skip_front =
@@ -244,8 +243,7 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags) {
 /// \throw Unsupported_tag)
 void
 skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
-	noexcept(false)
-{
+	noexcept(false) {
 	struct ape_header	footer;
 	off_t			pos;
 	uint32_t		flags;
@@ -297,8 +295,7 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 } // end multigain
 
 void
-multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
-{
+multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 	struct id3_1_tag	tag31;
 	// big enough for the longest id: 'APETAGEX'
 	uint8_t			buf[8];
@@ -476,8 +473,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
 }
 
 void
-multigain::dump_tags(const std::list<tag_info> &tags)
-{
+multigain::dump_tags(const std::list<tag_info> &tags) {
 	for (std::list<tag_info>::const_iterator i = tags.begin();
 	    i != tags.end(); ++i) {
 		const char *name;

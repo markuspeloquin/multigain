@@ -26,8 +26,7 @@
 namespace {
 
 inline double
-sample_i2d(int16_t sample)
-{
+sample_i2d(int16_t sample) {
 	/*
 	if (sample < 0)
 		return sample * 32767.0 / 32768;
@@ -38,8 +37,7 @@ sample_i2d(int16_t sample)
 } // end anon
 
 int
-main(int argc, char **argv)
-{
+main(int argc, char **argv) {
 	using namespace multigain;
 
 	const size_t SAMPLES = 4096;

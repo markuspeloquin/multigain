@@ -12,6 +12,6 @@ libmultigain_la_SOURCES = \
 	gain_analysis.c \
 	tag_locate.cpp
 #AM_CFLAGS = -fpic -std=c99 -pedantic -Wall
-AM_CFLAGS = -std=c99 -pedantic -Wall -W
+AM_CFLAGS = -std=c99 -pedantic -Wall -Wextra
 AM_CPPFLAGS = -D_FILE_OFFSET_BITS=64
-AM_CXXFLAGS = -std=c++17 -pedantic -Wall -W
+AM_CXXFLAGS = -std=c++17 -pedantic -Wall -Wextra
