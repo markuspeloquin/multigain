@@ -326,7 +326,7 @@ multigain::Mpeg_decoder::decode(Audio_buffer *buf) {
 	if (!tot_samples)
 		assert(_samples == _skip_back);
 
-	return std::make_pair(bytes_read, tot_samples);
+	return {bytes_read, tot_samples};
 }
 
 void

@@ -56,7 +56,6 @@ main(int argc, char **argv) {
 	Mpeg_decoder		decoder(file);
 	Audio_buffer		audio_buf(SAMPLES);
 	std::unique_ptr<Analyzer>	analyzer;
-	std::pair<size_t, size_t>	counts;
 	uint16_t		frequency;
 
 	std::unique_ptr<double> dbuf(new double[2 * SAMPLES]);
@@ -66,9 +65,9 @@ main(int argc, char **argv) {
 	uint32_t total = 0;
 
 	for (;;) {
-		counts = decoder.decode(&audio_buf);
+		auto [bytes, samples] = decoder.decode(&audio_buf);
 		uint16_t freq = audio_buf.frequency();
-		if (!counts.second)
+		if (!samples)
 			break;
 		else if (!analyzer) {
 			frequency = freq;
@@ -78,7 +77,7 @@ main(int argc, char **argv) {
 			analyzer->reset_sample_frequency(frequency);
 		}
 
-		total += counts.second;
+		total += samples;
 
 		uint8_t channels = audio_buf.channels();
 		const int16_t *lsamp = audio_buf.samples()[0];
@@ -86,13 +85,13 @@ main(int argc, char **argv) {
 		    audio_buf.samples()[0] : audio_buf.samples()[1];
 
 		// convert to doubles
-		for (size_t i = 0; i < counts.second; i++)
+		for (size_t i = 0; i < samples; i++)
 			ldbuf[i] = sample_i2d(lsamp[i]);
 		if (channels != 1)
-			for (size_t i = 0; i < counts.second; i++)
+			for (size_t i = 0; i < samples; i++)
 				rdbuf[i] = sample_i2d(rsamp[i]);
 
-		if (!analyzer->add(ldbuf, rdbuf, counts.second, channels)) {
+		if (!analyzer->add(ldbuf, rdbuf, samples, channels)) {
 			std::cerr << "what\n";
 			return 1;
 		}

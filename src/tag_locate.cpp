@@ -474,10 +474,9 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 
 void
 multigain::dump_tags(const std::list<tag_info> &tags) {
-	for (std::list<tag_info>::const_iterator i = tags.begin();
-	    i != tags.end(); ++i) {
+	for (const auto &tag : tags) {
 		const char *name;
-		switch (i->type) {
+		switch (tag.type) {
 		case tag_type::UNDEFINED:
 			name = "UNDEFINED";
 			break;
@@ -519,7 +518,7 @@ multigain::dump_tags(const std::list<tag_info> &tags) {
 			assert(0);
 		}
 
-		std::cout << name << ": " << i->start << ", "
-		    << i->size << '\n';
+		std::cout << name << ": " << tag.start << ", " << tag.size
+		    << '\n';
 	}
 }
