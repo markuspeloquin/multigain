@@ -55,8 +55,8 @@ uint8_t MPEG_INTENSITY_BAND[4] = {
 #if 0
 bool		is_lame(const uint8_t *, size_t);
 #endif
-inline uint8_t	mpeg_bitrate_tab(enum Mpeg_frame_header::version_type,
-		    enum Mpeg_frame_header::layer_type);
+inline uint8_t	mpeg_bitrate_tab(Mpeg_frame_header::version_type,
+		    Mpeg_frame_header::layer_type);
 #if 0
 void		sample_translate(const int16_t *, size_t, uint8_t,
 		    double *out);
@@ -65,22 +65,25 @@ void		sample_translate(const int16_t *, size_t, uint8_t,
 
 /** Returns an index into <code>MPEG_BITRATE</code> */
 inline uint8_t
-mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
-    enum Mpeg_frame_header::layer_type layer) {
+mpeg_bitrate_tab(Mpeg_frame_header::version_type version,
+    Mpeg_frame_header::layer_type layer) {
+	using layer_type = Mpeg_frame_header::layer_type;
+	using version_type = Mpeg_frame_header::version_type;
+
 	switch (version) {
-	case Mpeg_frame_header::VERS_1:
+	case version_type::V1:
 		switch (layer) {
-		case Mpeg_frame_header::LAYER_1: return 0;
-		case Mpeg_frame_header::LAYER_2: return 1;
-		case Mpeg_frame_header::LAYER_3: return 2;
+		case layer_type::L1: return 0;
+		case layer_type::L2: return 1;
+		case layer_type::L3: return 2;
 		default: assert(0);
 		}
-	case Mpeg_frame_header::VERS_2:
-	case Mpeg_frame_header::VERS_2_5:
+	case version_type::V2:
+	case version_type::V2_5:
 		switch (layer) {
-		case Mpeg_frame_header::LAYER_1: return 3;
-		case Mpeg_frame_header::LAYER_2: return 4;
-		case Mpeg_frame_header::LAYER_3: return 4;
+		case layer_type::L1: return 3;
+		case layer_type::L2: return 4;
+		case layer_type::L3: return 4;
 		default: assert(0);
 		}
 	default: assert(0);
@@ -152,18 +155,17 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file) :
 	for (std::list<tag_info>::const_iterator i = tags.begin();
 	    i != tags.end(); ++i)
 		switch (i->type) {
-		case TAG_MPEG:
+		case tag_type::MPEG:
 			_pos = i->start;
 			_end = _pos + i->size;
 			// also i->extra.count;
 			break;
-		case TAG_MP3_INFO:
-		case TAG_MP3_XING:
+		case tag_type::MP3_INFO:
+		case tag_type::MP3_XING:
 			_skip_front = i->extra.info.skip_front;
 			_skip_back = i->extra.info.skip_back;
 			break;
-		default:
-			;
+		default:;
 		}
 
 	if (_pos < 0)
@@ -334,18 +336,18 @@ multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal) {
 		throw Bad_header();
 
 	// -------- ---VVLLP BBBBFFPp CCMMCOEE
-	_version = static_cast<enum version_type>((header[1] >> 3) & 0x3);
-	if (_version == VERS_RESERVED)
+	_version = static_cast<version_type>((header[1] >> 3) & 0x3);
+	if (_version == version_type::RESERVED)
 		throw Bad_header();
-	_layer = static_cast<enum layer_type>((header[1] >> 1) & 0x3);
-	if (_layer == LAYER_RESERVED)
+	_layer = static_cast<layer_type>((header[1] >> 1) & 0x3);
+	if (_layer == layer_type::RESERVED)
 		throw Bad_header();
 	_bitrate = header[2] >> 4;
 	_frequency = (header[2] >> 2) & 0x3;
 	_padded = (header[2] & 0x2) == 0x2;
 
 	// don't bother checking for invalid modes
-	_chan_mode = static_cast<enum channel_mode_type>(header[3] >> 6);
+	_chan_mode = static_cast<channel_mode_type>(header[3] >> 6);
 
 	if (minimal) {
 		_has_crc = false;
@@ -355,12 +357,12 @@ multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal) {
 		_ms_stereo = false;
 		_copyright = false;
 		_original = false;
-		_emphasis = EMPH_NONE;
+		_emphasis = emphasis_type::NONE;
 	} else {
 		_has_crc = header[1] & 0x1;
 		_priv = header[2] & 0x1;
-		if (_chan_mode == CHAN_JOINT_STEREO) {
-			if (_layer == LAYER_3) {
+		if (_chan_mode == channel_mode_type::JOINT_STEREO) {
+			if (_layer == layer_type::L3) {
 				_intensity_band = 0;
 				_intensity_stereo = (header[3] >> 5) & 0x1;
 				_ms_stereo = (header[3] >> 4) & 0x1;
@@ -377,7 +379,7 @@ multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal) {
 		}
 		_copyright = (header[3] >> 3) == 0x1;
 		_original = (header[3] >> 2) == 0x1;
-		_emphasis = static_cast<enum emphasis_type>(header[3] & 0x3);
+		_emphasis = static_cast<emphasis_type>(header[3] & 0x3);
 	}
 
 	// translate bitrate, frequency
@@ -386,11 +388,11 @@ multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal) {
 		throw Bad_header();
 	_bitrate *= 1000;
 
-	_frequency = MPEG_FREQ[_version][_frequency];
+	_frequency = MPEG_FREQ[static_cast<int>(_version)][_frequency];
 	if (_frequency <= 0)
 		throw Bad_header();
 
-	if (_layer == LAYER_1)
+	if (_layer == layer_type::L1)
 		_size = (12 * _bitrate / _frequency + _padded) * 4;
 	else
 		_size = 144 * _bitrate / _frequency + _padded;

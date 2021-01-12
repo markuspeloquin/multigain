@@ -23,39 +23,39 @@
 
 namespace multigain {
 
-enum tag_type {
-	TAG_UNDEFINED = 0,
-	TAG_APE_1,		/**< APE-1.0 */
-	TAG_APE_2,		/**< APE-2.0 */
-	TAG_APE_UNDEFINED,	/**< An APE-x tag with a known size */
-	TAG_ID3_1,		/**< ID3-1.0 */
-	TAG_ID3_1_1,		/**< ID3-1.1 */
-	TAG_ID3_2_3,		/**< ID3-2.3 */
-	TAG_ID3_2_4,		/**< ID3-2.4 */
-	TAG_ID3_2_UNDEFINED,	/**< An ID3-2.x tag with a known size */
-	TAG_MPEG,		/**< Not a tag, but an MPEG frame */
-	TAG_MP3_INFO,
-	TAG_MP3_XING
+enum class tag_type {
+	UNDEFINED = 0,
+	APE_1,		/**< APE-1.0 */
+	APE_2,		/**< APE-2.0 */
+	APE_UNDEFINED,	/**< An APE-x tag with a known size */
+	ID3_1,		/**< ID3-1.0 */
+	ID3_1_1,		/**< ID3-1.1 */
+	ID3_2_3,		/**< ID3-2.3 */
+	ID3_2_4,		/**< ID3-2.4 */
+	ID3_2_UNDEFINED,	/**< An ID3-2.x tag with a known size */
+	MPEG,		/**< Not a tag, but an MPEG frame */
+	MP3_INFO,
+	MP3_XING
 };
 
 /** Type and boundary of a tag */
 struct tag_info {
-	tag_info(enum tag_type type, off_t start, size_t size) :
+	tag_info(tag_type type, off_t start, size_t size) :
 		start(start), size(size), type(type)
 	{}
 
 	off_t		start;
 	size_t		size;
-	enum tag_type	type;
+	tag_type	type;
 
 	union {
 		struct {
-			// only for TAG_MP3_INFO or TAG_MP3_XING
+			// only for MP3_INFO or MP3_XING
 			uint16_t	skip_front;
 			uint16_t	skip_back;
 		} info;
 
-		// only for TAG_MPEG
+		// only for MPEG
 		uint32_t	count;
 	} extra;
 };

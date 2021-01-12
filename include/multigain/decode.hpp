@@ -130,7 +130,7 @@ public:
 	~Mpeg_decoder() noexcept;
 
 	Mpeg_decoder(const Mpeg_decoder &) = delete;
-	void operator=(const Mgeg_decoder &) = delete;
+	void operator=(const Mpeg_decoder &) = delete;
 
 	/** Decode samples
 	 *
@@ -169,29 +169,29 @@ class Mpeg_frame_header {
 public:
 	struct Bad_header : std::exception {};
 
-	enum version_type {
-		VERS_2_5 = 0,
-		VERS_RESERVED = 1,
-		VERS_2 = 2,
-		VERS_1 = 3
+	enum class version_type {
+		V2_5 = 0,
+		RESERVED = 1,
+		V2 = 2,
+		V1 = 3
 	};
-	enum layer_type {
-		LAYER_RESERVED = 0,
-		LAYER_3 = 1,
-		LAYER_2 = 2,
-		LAYER_1 = 3
+	enum class layer_type {
+		RESERVED = 0,
+		L3 = 1,
+		L2 = 2,
+		L1 = 3
 	};
-	enum channel_mode_type {
-		CHAN_STEREO = 0,
-		CHAN_JOINT_STEREO = 1,
-		CHAN_DUAL = 2,
-		CHAN_MONO = 3
+	enum class channel_mode_type {
+		STEREO = 0,
+		JOINT_STEREO = 1,
+		DUAL = 2,
+		MONO = 3
 	};
-	enum emphasis_type {
-		EMPH_NONE = 0,
-		EMPH_50_15_MS = 1,
-		EMPH_RESERVED = 2,
-		EMPH_CCIT_J17 = 3
+	enum class emphasis_type {
+		NONE = 0,
+		MS_50_15 = 1,
+		RESERVED = 2,
+		CCIT_J17 = 3
 	};
 
 	// must call init() before anything else
@@ -206,11 +206,11 @@ public:
 	/// \throw Bad_header
 	void init(const uint8_t[4], bool minimal=false);
 
-	enum version_type version() const {
+	version_type version() const {
 		return _version;
 	}
 
-	enum layer_type layer() const {
+	layer_type layer() const {
 		return _layer;
 	}
 
@@ -234,20 +234,19 @@ public:
 		return _priv;
 	}
 
-	enum channel_mode_type channel_mode() const {
+	channel_mode_type channel_mode() const {
 		return _chan_mode;
 	}
 
 	unsigned channels() const {
-		return _chan_mode == CHAN_MONO ? 1 : 2;
+		return _chan_mode == channel_mode_type::MONO ? 1 : 2;
 	}
 
 	std::pair<uint8_t, uint8_t> intensity_bands() const {
-		if (_layer != LAYER_3 && _chan_mode == CHAN_JOINT_STEREO)
-			return std::pair<uint8_t, uint8_t>(
-			    _intensity_band, 31);
-		else
-			return std::make_pair<uint8_t, uint8_t>(0, 0);
+		if (_layer == layer_type::L3 ||
+		    _chan_mode != channel_mode_type::JOINT_STEREO)
+			return {0, 0};
+		return {_intensity_band, 31};
 	}
 
 	bool intensity_stereo() const {
@@ -266,7 +265,7 @@ public:
 		return _original;
 	}
 
-	enum emphasis_type emphasis() const {
+	emphasis_type emphasis() const {
 		return _emphasis;
 	}
 
@@ -278,10 +277,10 @@ private:
 	uint32_t		_bitrate;
 	uint16_t		_frequency;
 	uint16_t		_size;
-	enum channel_mode_type	_chan_mode;
-	enum emphasis_type	_emphasis;
-	enum layer_type		_layer;
-	enum version_type	_version;
+	channel_mode_type	_chan_mode;
+	emphasis_type		_emphasis;
+	layer_type		_layer;
+	version_type		_version;
 	uint8_t			_intensity_band;
 	bool			_copyright;
 	bool			_has_crc;

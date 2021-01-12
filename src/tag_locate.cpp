@@ -136,14 +136,14 @@ skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags) {
 
 	// check version
 	if (header.version[0] == 3 && header.version[1] == 0)
-		type = TAG_ID3_2_3;
+		type = tag_type::ID3_2_3;
 	else if (header.version[0] == 4 && header.version[1] == 0)
-		type = TAG_ID3_2_4;
+		type = tag_type::ID3_2_4;
 	else {
 		// ensure all unknown flags are zero
 		if (header.flags & 0x0f)
 			throw Unsupported_tag("ID3-2.x with unknown flags");
-		type = TAG_ID3_2_UNDEFINED;
+		type = tag_type::ID3_2_UNDEFINED;
 	}
 
 	// get size for whole tag
@@ -157,8 +157,8 @@ skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags) {
 
 #if 0
 // return false iff tag unrecognized; if tag had an unknown version, it is
-// recorded as TAG_APE_UNDEFINED in 'out_tags', but APE is concistent enough
-// that the size can be known
+// recorded as tag_type::APE_UNDEFINED in 'out_tags', but APE is concistent
+// enough that the size can be known
 /// \throw Disk_error
 /// \throw Unsupported_tag
 bool
@@ -191,8 +191,8 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags) {
 			flags = le32toh(footer->flags);
 
 			switch (le32toh(footer->version)) {
-			case 1000: type = TAG_APE_1; break;
-			case 2000: type = TAG_APE_2; break;
+			case 1000: type = tag_type::APE_1; break;
+			case 2000: type = tag_type::APE_2; break;
 			default:
 				// ensure all unknown flags are zero
 				if (flags & 0x1ffffff8 ||
@@ -201,7 +201,7 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags) {
 				    sizeof(footer->reserved)) != 0)
 					throw Unsupported_tag(
 					    "APE with unknown flags");
-				type = TAG_APE_UNDEFINED;
+				type = tag_type::APE_UNDEFINED;
 			}
 
 			// footer + all of tag items (no header)
@@ -263,14 +263,14 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 
 	flags = le32toh(footer.flags);
 	switch (le32toh(footer.version)) {
-	case 1000: type = TAG_APE_1; break;
-	case 2000: type = TAG_APE_2; break;
+	case 1000: type = tag_type::APE_1; break;
+	case 2000: type = tag_type::APE_2; break;
 	default:
 		// ensure all unknown flags are zero
 		if (flags & 0x1ffffff8 || std::max_element(footer.reserved,
 		    footer.reserved + sizeof(footer.reserved)) != 0)
 			throw Unsupported_tag("APE with unknown flags");
-		type = TAG_APE_UNDEFINED;
+		type = tag_type::APE_UNDEFINED;
 	}
 
 	// footer + all tag items (no header)
@@ -313,7 +313,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 			throw Disk_error("seek error");
 		if (!in.read(reinterpret_cast<char *>(buf), 8)) {
 			if (!out_tags.empty() &&
-			    out_tags.back().type == TAG_MPEG && in.eof())
+			    out_tags.back().type == tag_type::MPEG && in.eof())
 				break;
 			throw Disk_error("read error");
 		}
@@ -354,7 +354,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 				// MP3 Xing tag
 				// add back frame header
 				out_tags.push_back(
-				    tag_info(TAG_MP3_XING, pos, size));
+				    tag_info(tag_type::MP3_XING, pos, size));
 
 				find_skip_amounts(info, &out_tags.back());
 
@@ -364,7 +364,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 				// MP3 Info tag
 				// add back frame header
 				out_tags.push_back(
-				    tag_info(TAG_MP3_INFO, pos, size));
+				    tag_info(tag_type::MP3_INFO, pos, size));
 
 				find_skip_amounts(info, &out_tags.back());
 
@@ -372,11 +372,11 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 			} else {
 				// start of MP3 data
 				if (!out_tags.empty() &&
-				    out_tags.back().type == TAG_MPEG)
+				    out_tags.back().type == tag_type::MPEG)
 					iter_media->extra.count++;
 				else {
 					out_tags.push_back(
-					    tag_info(TAG_MPEG, pos, 0));
+					    tag_info(tag_type::MPEG, pos, 0));
 					out_tags.back().extra.count = 0;
 					--(iter_media = out_tags.end());
 				}
@@ -384,7 +384,7 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 			}
 		} else {
 			if (!out_tags.empty() &&
-			    out_tags.back().type == TAG_MPEG)
+			    out_tags.back().type == tag_type::MPEG)
 				break;
 			else if (std::equal(buf, buf + 3, "ID3")) {
 				if (!in.seekg(pos, std::ios_base::beg))
@@ -431,9 +431,9 @@ multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags) {
 			enum tag_type	type;
 			if (!tag31.ct.id3_1_1.__padding &&
 			    tag31.ct.id3_1_1.track)
-				type = TAG_ID3_1_1;
+				type = tag_type::ID3_1_1;
 			else
-				type = TAG_ID3_1;
+				type = tag_type::ID3_1;
 			out_tags.push_back(tag_info(type, pos - sizeof(tag31),
 			    sizeof(tag31)));
 			pos -= sizeof(tag31);
@@ -478,41 +478,41 @@ multigain::dump_tags(const std::list<tag_info> &tags) {
 	    i != tags.end(); ++i) {
 		const char *name;
 		switch (i->type) {
-		case TAG_UNDEFINED:
-			name = "TAG_UNDEFINED";
+		case tag_type::UNDEFINED:
+			name = "UNDEFINED";
 			break;
-		case TAG_APE_1:
-			name = "TAG_APE_1";
+		case tag_type::APE_1:
+			name = "APE_1";
 			break;
-		case TAG_APE_2:
-			name = "TAG_APE_2";
+		case tag_type::APE_2:
+			name = "APE_2";
 			break;
-		case TAG_APE_UNDEFINED:
-			name = "TAG_APE_UNDEFINED";
+		case tag_type::APE_UNDEFINED:
+			name = "APE_UNDEFINED";
 			break;
-		case TAG_ID3_1:
-			name = "TAG_ID3_1";
+		case tag_type::ID3_1:
+			name = "ID3_1";
 			break;
-		case TAG_ID3_1_1:
-			name = "TAG_ID3_1_1";
+		case tag_type::ID3_1_1:
+			name = "ID3_1_1";
 			break;
-		case TAG_ID3_2_3:
-			name = "TAG_ID3_2_3";
+		case tag_type::ID3_2_3:
+			name = "ID3_2_3";
 			break;
-		case TAG_ID3_2_4:
-			name = "TAG_ID3_2_4";
+		case tag_type::ID3_2_4:
+			name = "ID3_2_4";
 			break;
-		case TAG_ID3_2_UNDEFINED:
-			name = "TAG_ID3_2_UNDEFINED";
+		case tag_type::ID3_2_UNDEFINED:
+			name = "ID3_2_UNDEFINED";
 			break;
-		case TAG_MPEG:
-			name = "TAG_MPEG";
+		case tag_type::MPEG:
+			name = "MPEG";
 			break;
-		case TAG_MP3_INFO:
-			name = "TAG_MP3_INFO";
+		case tag_type::MP3_INFO:
+			name = "MP3_INFO";
 			break;
-		case TAG_MP3_XING:
-			name = "TAG_MP3_XING";
+		case tag_type::MP3_XING:
+			name = "MP3_XING";
 			break;
 		default:
 			name = "";

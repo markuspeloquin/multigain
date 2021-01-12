@@ -81,20 +81,20 @@ const double	GAIN_NOT_ENOUGH_SAMPLES = -24601.;
 
 #ifdef __cplusplus
 	/** Not to be used directly. */
-	const unsigned	STEPS_PER_DB =	100;
+	const unsigned	STEPS_PER_DB = 100;
 
 	/* Table entries for 0...MAX_dB (normal max. values are 70...80 dB) */
 	/** Not to be used directly. */
-	const unsigned	MAX_DB =	120;
+	const unsigned	MAX_DB = 120;
 
 	/** Not to be used directly. */
-	const size_t	ANALYZE_SIZE =	STEPS_PER_DB * MAX_DB;
+	const size_t	ANALYZE_SIZE = STEPS_PER_DB * MAX_DB;
 
 #	define	__INLINE	inline
 #else
 #	define		STEPS_PER_DB	100
 #	define		MAX_DB		120
-#	define		ANALYZE_SIZE	STEPS_PER_DB * MAX_DB
+#	define		ANALYZE_SIZE	(STEPS_PER_DB * MAX_DB)
 
 #	define	__INLINE	static inline
 #endif
