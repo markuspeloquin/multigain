@@ -98,8 +98,8 @@ struct replaygain_ctx {
 
 	/* number of samples required to reach number of milliseconds required
 	 * for RMS window */
-	unsigned long	sampleWindow;
-	unsigned long	totsamp;
+	uint16_t	sample_window;
+	uint16_t	totsamp;
 	Float_t		lsum;
 	Float_t		rsum;
 	int		freqindex;
@@ -279,7 +279,7 @@ replaygain_reset_frequency(struct replaygain_ctx *ctx, long freq)
 	}
 
 	/* ceil(freq * (float)NUM/DEN) */
-	ctx->sampleWindow =
+	ctx->sample_window =
 	    (freq * RMS_WINDOW_TIME_NUM + RMS_WINDOW_TIME_DEN-1) /
 	    RMS_WINDOW_TIME_DEN;
 
@@ -333,7 +333,7 @@ enum replaygain_status
 replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
     const Float_t *rsamples, size_t num_samples, int channels)
 {
-	long	batchsamples;
+	size_t	batchsamples;
 	size_t	copy_samples;
 	long	cursamplepos;
 
@@ -356,14 +356,17 @@ replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
 	memcpy(ctx->rinprebuf + MAX_ORDER, rsamples,
 	    copy_samples * sizeof(Float_t));
 
-	while (batchsamples > 0) {
+	while (batchsamples != 0) {
 		const Float_t	*curleft;
 		const Float_t	*curright;
-		long		cursamples;
 		int		i;
+		uint16_t	remaining;
+		uint16_t	cursamples;
 
-		cursamples = batchsamples > ctx->sampleWindow - ctx->totsamp ?
-		    ctx->sampleWindow - ctx->totsamp : batchsamples;
+		// cursamples = min(batchsamples, sample_window - totsamp);
+		remaining = ctx->sample_window - ctx->totsamp;
+		cursamples = remaining < batchsamples ? remaining :
+		    batchsamples;
 		if (cursamplepos < MAX_ORDER) {
 			curleft  = ctx->linpre + cursamplepos;
 			curright = ctx->rinpre + cursamplepos;
@@ -433,12 +436,15 @@ replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
 			curright += 16;
 		}
 
-		batchsamples -= cursamples;
+		if (batchsamples < cursamples)
+			batchsamples = 0;
+		else
+			batchsamples -= cursamples;
 		cursamplepos += cursamples;
 		ctx->totsamp += cursamples;
 
 		/* get the RMS for this set of samples */
-		if (ctx->totsamp == ctx->sampleWindow) {
+		if (ctx->totsamp == ctx->sample_window) {
 			double	val;
 			size_t	ival;
 
@@ -463,11 +469,11 @@ replaygain_analyze(struct replaygain_ctx *ctx, const Float_t *lsamples,
 			ctx->totsamp = 0;
 		}
 		/* XXX somehow I really screwed up: Error in programming!
-		 * Contact author about totsamp > sampleWindow
+		 * Contact author about totsamp > sample_window
 		 *
 		 * Markus: I'm not sure who wrote above note or what it
 		 * means; maybe it's an assertion */
-		if (ctx->totsamp > ctx->sampleWindow)
+		if (ctx->totsamp > ctx->sample_window)
 			return REPLAYGAIN_ERROR;
 	}
 	if (num_samples < MAX_ORDER) {

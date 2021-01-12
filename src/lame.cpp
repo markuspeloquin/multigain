@@ -28,7 +28,7 @@ lame_errorf(const char *fmt, va_list ap)
 
 }
 
-multigain::Lame_lib::~Lame_lib()
+multigain::Lame_lib::~Lame_lib() noexcept
 {
 	try {
 		destroy();

@@ -70,8 +70,7 @@ struct tag_info {
  *	this is thrown and out.empty(), then it is reasonable to assume that
  *	this file is not at all supported.
  */
-void	find_tags(std::ifstream &in, std::list<tag_info> &out)
-	    throw (Disk_error, Unsupported_tag);
+void	find_tags(std::ifstream &in, std::list<tag_info> &out) noexcept(false);
 
 void	dump_tags(const std::list<tag_info> &);
 

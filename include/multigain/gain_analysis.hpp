@@ -85,8 +85,7 @@ public:
 	 * \return	The adjustment
 	 * \throw Not_enough_samples	...
 	 */
-	double adjustment() const throw (Not_enough_samples)
-	{
+	double adjustment() const {
 		double	v;
 		if (_dirty) {
 			v = replaygain_adjustment(&_value);
@@ -146,8 +145,7 @@ public:
 	 * \return	The adjustment
 	 * \throw Not_enough_samples	...
 	 */
-	double adjustment() const throw (Not_enough_samples)
-	{
+	double adjustment() const {
 		double	v;
 		if (_dirty) {
 			v = replaygain_adjustment(&_sum);
@@ -171,10 +169,9 @@ public:
 	/** Construct the analyzer object
 	 *
 	 * \param samplefreq	The input sample frequency
+	 * \throw Bad_samplefreq
 	 */
-	Analyzer(long freq) throw (Bad_samplefreq) :
-		_ctx(0)
-	{
+	Analyzer(long freq) : _ctx(0) {
 		enum replaygain_status	status;
 		_ctx = replaygain_alloc(freq, &status);
 		switch (status) {
@@ -189,8 +186,7 @@ public:
 		}
 	}
 
-	~Analyzer()
-	{
+	~Analyzer() noexcept {
 		replaygain_free(_ctx);
 	}
 

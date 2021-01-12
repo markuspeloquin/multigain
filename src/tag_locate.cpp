@@ -72,26 +72,30 @@ struct id3_1_tag {
 /*80*/
 };
 
-inline uint16_t
-buf_safe16(const uint8_t buf[2])
-{
+#if 0
+inline uint16_t buf_safe16(const uint8_t buf[2]) {
 	return buf[0] << 7 | buf[1];
 }
-inline uint16_t
-buf_unsafe16(const uint8_t buf[2])
-{
+#endif
+
+
+#if 0
+inline uint16_t buf_unsafe16(const uint8_t buf[2]) {
 	return buf[0] << 8 | buf[1];
 }
-inline uint32_t
-buf_safe32(const uint8_t buf[4])
-{
+#endif
+
+
+inline uint32_t buf_safe32(const uint8_t buf[4]) {
 	return buf[0] << 21 | buf[1] << 14 | buf[2] << 7 | buf[3];
 }
-inline uint32_t
-buf_unsafe32(const uint8_t buf[4])
-{
+
+
+#if 0
+inline uint32_t buf_unsafe32(const uint8_t buf[4]) {
 	return buf[0] << 24 | buf[1] << 16 | buf[2] << 8 | buf[3];
 }
+#endif
 
 inline void
 find_skip_amounts(const uint8_t *info, tag_info *tag_info)
@@ -104,10 +108,10 @@ find_skip_amounts(const uint8_t *info, tag_info *tag_info)
 	    (static_cast<uint16_t>(skip[1] & 0xf) << 8) | skip[2];
 }
 
+/// \throw Disk_error
+/// \throw Unsupported_tag
 void
-skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
-    throw (Disk_error, Unsupported_tag)
-{
+skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags) {
 	struct id3_2_header	header;
 	off_t			pos;
 	uint32_t		size;
@@ -153,13 +157,14 @@ skip_id3_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 	out_tags.push_back(tag_info(type, pos, size));
 }
 
+#if 0
 // return false iff tag unrecognized; if tag had an unknown version, it is
 // recorded as TAG_APE_UNDEFINED in 'out_tags', but APE is concistent enough
 // that the size can be known
+/// \throw Disk_error
+/// \throw Unsupported_tag
 bool
-skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags)
-    throw (Disk_error, Unsupported_tag)
-{
+skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags) {
 	union {
 		struct ape_header	footer;	// if footer
 		uint32_t		len;	// if tag item
@@ -234,10 +239,13 @@ skip_ape_1(std::ifstream &in, std::list<tag_info> &out_tags)
 
 	return true;
 }
+#endif
 
+/// \throw Disk_error
+/// \throw Unsupported_tag)
 void
 skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
-    throw (Disk_error, Unsupported_tag)
+	noexcept(false)
 {
 	struct ape_header	footer;
 	off_t			pos;
@@ -291,7 +299,6 @@ skip_ape_2(std::ifstream &in, bool reversed, std::list<tag_info> &out_tags)
 
 void
 multigain::find_tags(std::ifstream &in, std::list<tag_info> &out_tags)
-    throw (Disk_error, Unsupported_tag)
 {
 	struct id3_1_tag	tag31;
 	// big enough for the longest id: 'APETAGEX'

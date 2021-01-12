@@ -52,11 +52,15 @@ uint8_t MPEG_INTENSITY_BAND[4] = {
 };
 
 
+#if 0
 bool		is_lame(const uint8_t *, size_t);
+#endif
 inline uint8_t	mpeg_bitrate_tab(enum Mpeg_frame_header::version_type,
 		    enum Mpeg_frame_header::layer_type);
+#if 0
 void		sample_translate(const int16_t *, size_t, uint8_t,
 		    double *out);
+#endif
 
 
 /** Returns an index into <code>MPEG_BITRATE</code> */
@@ -85,6 +89,7 @@ mpeg_bitrate_tab(enum Mpeg_frame_header::version_type version,
 	return 0xff;
 }
 
+#if 0
 void
 sample_translate(const int16_t *samples, size_t count, uint8_t step,
     double *out)
@@ -98,7 +103,9 @@ sample_translate(const int16_t *samples, size_t count, uint8_t step,
 			*out++ = sample;
 	}
 }
+#endif
 
+#if 0
 // these are usually LAME tags, which should be skipped over for replaygain
 // analysis
 bool
@@ -123,12 +130,12 @@ is_lame(const uint8_t *frame, size_t sz)
 	    std::equal(begin, begin + 4,
 	    reinterpret_cast<const uint8_t *>("Info")));
 }
+#endif
 
 } // end anon
 } // end multigain
 
-multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file)
-    throw (Decode_error, Disk_error, Lame_error) :
+multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file) :
 	_file(file),
 	_end(-1),
 	_pos(-1),
@@ -166,7 +173,7 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file)
 	if (_pos < 0)
 		throw Bad_format("not an MPEG audio file");
 
-	if (_skip_front == -1)
+	if (_skip_front == static_cast<uint16_t>(-1))
 		_skip_front = lame_get_encoder_delay(lame) + 528 + 1;
 		// leave _skip_back at 0
 	else {
@@ -182,14 +189,13 @@ multigain::Mpeg_decoder::Mpeg_decoder(std::ifstream &file)
 		throw Disk_error("seek error");
 }
 
-multigain::Mpeg_decoder::~Mpeg_decoder()
+multigain::Mpeg_decoder::~Mpeg_decoder() noexcept
 {
 	/*int ret =*/ hip_decode_exit(_gfp);
 }
 
 boost::shared_ptr<multigain::Mpeg_frame_header>
 multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
-    throw (Disk_error)
 {
 	boost::shared_ptr<Mpeg_frame_header> hdr;
 	char *buf = reinterpret_cast<char *>(frame);
@@ -230,7 +236,6 @@ multigain::Mpeg_decoder::next_frame(uint8_t frame[MAX_FRAME_LEN])
 
 std::pair<size_t, size_t>
 multigain::Mpeg_decoder::decode(Audio_buffer *buf)
-    throw (Decode_error, Disk_error, Lame_decode_error)
 {
 	// encoded data
 	uint8_t					mp3buf[MAX_FRAME_LEN];
@@ -328,9 +333,7 @@ multigain::Mpeg_decoder::decode(Audio_buffer *buf)
 }
 
 void
-multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal)
-    throw (Bad_header)
-{
+multigain::Mpeg_frame_header::init(const uint8_t header[4], bool minimal) {
 	// verify frame sync
 	if (header[0] != 0xff || (header[1] & 0xe0) != 0xe0)
 		throw Bad_header();

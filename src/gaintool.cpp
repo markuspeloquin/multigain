@@ -57,8 +57,8 @@ main(int argc, char **argv)
 
 	Mpeg_decoder		decoder(file);
 	Audio_buffer		audio_buf(SAMPLES);
-	std::auto_ptr<Analyzer>	analyzer;
-	std::pair<size_t, size_t> counts;
+	std::unique_ptr<Analyzer>	analyzer;
+	std::pair<size_t, size_t>	counts;
 	uint16_t		frequency;
 
 	boost::scoped_array<double> dbuf(new double[2 * SAMPLES]);
@@ -72,9 +72,9 @@ main(int argc, char **argv)
 		uint16_t freq = audio_buf.frequency();
 		if (!counts.second)
 			break;
-		else if (!analyzer.get()) {
+		else if (!analyzer) {
 			frequency = freq;
-			analyzer.reset(new Analyzer(freq));
+			analyzer = std::make_unique<Analyzer>(freq);
 		} else if (frequency != freq) {
 			frequency = freq;
 			analyzer->reset_sample_frequency(frequency);
@@ -100,7 +100,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (!analyzer.get()) {
+	if (!analyzer) {
 		std::cerr << "failed to read anything\n";
 		return 1;
 	}

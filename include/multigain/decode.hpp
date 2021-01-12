@@ -94,20 +94,25 @@ public:
 
 class Decoder {
 public:
-	virtual ~Decoder() {}
+	virtual ~Decoder() noexcept {}
 
+	/// \throw Decode_error
+	/// \throw Disk_error
 	virtual std::pair<size_t, size_t> decode(Audio_buffer *)
-	    throw (Decode_error, Disk_error) = 0;
+	    = 0;
 };
 
 class Flac_decoder : public Decoder {
 public:
-	Flac_decoder(FILE *fp)
-	    throw (Disk_error, Lame_decode_error);
-	~Flac_decoder();
+	/// \throw Disk_error
+	/// \throw Lame_decode_error
+	Flac_decoder(FILE *fp);
+	~Flac_decoder() noexcept;
 
-	std::pair<size_t, size_t> decode(Audio_buffer *)
-	    throw (Decode_error, Disk_error, Lame_decode_error);
+	/// \throw Decode_error
+	/// \throw Disk_error
+	/// \throw Lame_decode_error
+	std::pair<size_t, size_t> decode(Audio_buffer *);
 };
 
 class Mpeg_frame_header;
@@ -124,9 +129,8 @@ public:
 	 * \throw Disk_error	Problem searching tags
 	 * \throw Lame_error	The LAME library has some error
 	 */
-	Mpeg_decoder(std::ifstream &file)
-	    throw (Decode_error, Disk_error, Lame_error);
-	~Mpeg_decoder();
+	Mpeg_decoder(std::ifstream &file);
+	~Mpeg_decoder() noexcept;
 
 	/** Decode samples
 	 *
@@ -139,8 +143,7 @@ public:
 	 * \throw Lame_error	The LAME library has some error
 	 * \return	Input bytes consumed, samples decoded
 	 */
-	std::pair<size_t, size_t> decode(Audio_buffer *)
-	    throw (Decode_error, Disk_error, Lame_decode_error);
+	std::pair<size_t, size_t> decode(Audio_buffer *);
 
 private:
 	Mpeg_decoder(const Mpeg_decoder &_) : _file(_._file)
@@ -151,12 +154,12 @@ private:
 	// 448 kbps, 8 kHz, padded
 	static const size_t MAX_FRAME_LEN = 8065;
 
+	/// \throw Disk_error
 	boost::shared_ptr<Mpeg_frame_header> next_frame(
-	    uint8_t[MAX_FRAME_LEN]) throw (Disk_error);
+	    uint8_t[MAX_FRAME_LEN]);
 
 	std::ifstream			&_file;
 	boost::scoped_array<short>	_sample_buf;
-	short				*_sample_bufs[2];
 	off_t				_end;
 	off_t				_pos;
 	struct hip_global_struct	*_gfp;
@@ -200,14 +203,14 @@ public:
 	// must call init() before anything else
 	Mpeg_frame_header() {}
 
-	Mpeg_frame_header(const uint8_t header[4], bool minimal=false)
-	    throw (Bad_header)
-	{
+	/// \throw Bad_header
+	Mpeg_frame_header(const uint8_t header[4], bool minimal=false) {
 		init(header, minimal);
 	}
 
 	// not exception-safe
-	void init(const uint8_t[4], bool minimal=false) throw (Bad_header);
+	/// \throw Bad_header
+	void init(const uint8_t[4], bool minimal=false);
 
 	enum version_type version() const
 	{	return _version; }
@@ -239,7 +242,7 @@ public:
 	std::pair<uint8_t, uint8_t> intensity_bands() const
 	{
 		if (_layer != LAYER_3 && _chan_mode == CHAN_JOINT_STEREO)
-			return std::make_pair<uint8_t, uint8_t>(
+			return std::pair<uint8_t, uint8_t>(
 			    _intensity_band, 31);
 		else
 			return std::make_pair<uint8_t, uint8_t>(0, 0);
