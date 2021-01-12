@@ -15,9 +15,9 @@
 #ifndef MULTIGAIN_TAG_LOCATE_HPP
 #define MULTIGAIN_TAG_LOCATE_HPP
 
+#include <cstdint>
 #include <fstream>
 #include <list>
-#include <tr1/cstdint>
 
 #include <multigain/errors.hpp>
 

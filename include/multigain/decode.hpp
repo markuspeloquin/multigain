@@ -15,8 +15,8 @@
 #ifndef MULTIGAIN_DECODE_HPP
 #define MULTIGAIN_DECODE_HPP
 
+#include <cstdint>
 #include <fstream>
-#include <tr1/cstdint>
 
 #include <boost/scoped_array.hpp>
 #include <boost/shared_ptr.hpp>

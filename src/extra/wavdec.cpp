@@ -1,6 +1,6 @@
 #include <cassert>
+#include <cstdint>
 #include <iostream>
-#include <tr1/cstdint>
 
 #include <boost/scoped_array.hpp>
 #include <sox.h>
